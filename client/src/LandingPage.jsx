@@ -36,7 +36,9 @@ export default function LandingPage() {
             can create customizable boards to organize your favorite tools, articles, videos, and anything else worth saving all in one clean dashboard.
           </p>
           <div className="flex flex-col sm:flex-row items-center gap-4 md:gap-6 justify-center lg:justify-start">
-            <button className="px-6 md:px-8 py-3 md:py-4 bg-blue-600 text-white rounded-full font-semibold text-base md:text-lg shadow hover:bg-blue-700 transition w-full sm:w-auto">Get Started</button>
+            <Link to="/signup" className="w-full sm:w-auto">
+              <button className="px-6 md:px-8 py-3 md:py-4 bg-blue-600 text-white rounded-full font-semibold text-base md:text-lg shadow hover:bg-blue-700 transition w-full sm:w-auto">Get Started</button>
+            </Link>
             <button className="flex items-center gap-2 px-6 md:px-6 py-3 md:py-4 bg-white border border-gray-300 text-black rounded-full font-semibold text-base md:text-lg shadow hover:bg-gray-100 transition w-full sm:w-auto">
               <span className="w-6 h-6 flex items-center justify-center">
                 <img src={playBtn} alt="Play" className="w-5 h-6" />
