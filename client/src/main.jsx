@@ -4,6 +4,7 @@ import './index.css';
 import LandingPage from './LandingPage.jsx';
 import Signup from './Signup.jsx';
 import Login from './Login.jsx';
+import Dashboard from './Dashboard.jsx';
 import { BrowserRouter, Routes, Route } from 'react-router-dom';
 
 createRoot(document.getElementById('root')).render(
@@ -13,6 +14,7 @@ createRoot(document.getElementById('root')).render(
         <Route path="/" element={<LandingPage />} />
         <Route path="/signup" element={<Signup />} />
         <Route path="/login" element={<Login />} />
+        <Route path="/dashboard" element={<Dashboard />} />
       </Routes>
     </BrowserRouter>
   </StrictMode>,
