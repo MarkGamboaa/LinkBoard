@@ -13,7 +13,9 @@ export default function LandingPage() {
       <div className="flex justify-between items-center px-6 md:px-16 lg:px-30 pt-6 md:pt-10">
         <span className="text-3xl font-extrabold text-blue-700">LinkBoard</span>
         <div className="space-x-4">
-          <button className="text-black font-medium">Login</button>
+          <Link to="/login">
+            <button className="text-black font-medium">Login</button>
+          </Link>
           <Link to="/signup">
             <button className="bg-blue-600 text-white px-4 py-2 rounded-lg font-semibold ml-2 hover:bg-blue-700 transition">Sign Up</button>
           </Link>
