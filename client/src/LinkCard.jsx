@@ -98,9 +98,7 @@ export default function LinkCard({
     setSlidingLinks(affectedIndices);
     
     // Call parent function to update links
-    if (onReorderLinks && typeof onReorderLinks === 'function') {
-      onReorderLinks(newLinks);
-    }
+    onReorderLinks(newLinks);
     
     setDraggedLinkIndex(null);
     
