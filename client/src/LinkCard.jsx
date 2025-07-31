@@ -1,12 +1,15 @@
-import React from "react";
+import React, { useState } from "react";
 
 export default function LinkCard({
   category = "UI/UX",
   links = [],
   onDelete,
   onAddLink,
-  onDeleteLink
+  onDeleteLink,
+  onReorderLinks
 }) {
+  const [draggedLinkIndex, setDraggedLinkIndex] = useState(null);
+  const [slidingLinks, setSlidingLinks] = useState(new Set());
   // Each link is about 64px tall, gap is 16px (gap-4)
   // 3 links: 3*64 = 192px, 2 gaps: 2*16 = 32px, total = 224px
   // Add a little extra for padding/borders if needed
@@ -54,6 +57,59 @@ export default function LinkCard({
       : "text-black border border-gray-300";
   };
 
+  // Link drag and drop handlers
+  const handleLinkDragStart = (e, index) => {
+    setDraggedLinkIndex(index);
+    e.dataTransfer.effectAllowed = 'move';
+    e.dataTransfer.setData('text/html', e.target.outerHTML);
+  };
+
+  const handleLinkDragOver = (e) => {
+    e.preventDefault();
+    e.dataTransfer.dropEffect = 'move';
+  };
+
+  const handleLinkDrop = (e, dropIndex) => {
+    e.preventDefault();
+    if (draggedLinkIndex === null || draggedLinkIndex === dropIndex) {
+      setDraggedLinkIndex(null);
+      return;
+    }
+
+    const newLinks = [...links];
+    const draggedLink = newLinks[draggedLinkIndex];
+    newLinks.splice(draggedLinkIndex, 1);
+    newLinks.splice(dropIndex, 0, draggedLink);
+    
+    // Add sliding animation to all affected links
+    const affectedIndices = new Set();
+    if (draggedLinkIndex < dropIndex) {
+      // Moving forward - animate links in between
+      for (let i = draggedLinkIndex; i <= dropIndex; i++) {
+        affectedIndices.add(i);
+      }
+    } else {
+      // Moving backward - animate links in between
+      for (let i = dropIndex; i <= draggedLinkIndex; i++) {
+        affectedIndices.add(i);
+      }
+    }
+    
+    setSlidingLinks(affectedIndices);
+    
+    // Call parent function to update links
+    if (onReorderLinks && typeof onReorderLinks === 'function') {
+      onReorderLinks(newLinks);
+    }
+    
+    setDraggedLinkIndex(null);
+    
+    // Remove sliding animation after animation completes
+    setTimeout(() => {
+      setSlidingLinks(new Set());
+    }, 400);
+  };
+
   return (
     <div className="bg-white rounded-xl shadow-lg p-4 w-80 flex flex-col items-center relative">
       {/* Category and Delete */}
@@ -70,7 +126,14 @@ export default function LinkCard({
           style={links.length > 3 ? { maxHeight: maxLinkAreaHeight } : {}}
         >
           {links.map((link, idx) => (
-            <div key={idx} className="relative group">
+            <div 
+              key={idx} 
+              draggable
+              onDragStart={(e) => handleLinkDragStart(e, idx)}
+              onDragOver={handleLinkDragOver}
+              onDrop={(e) => handleLinkDrop(e, idx)}
+              className={`draggable-link relative group ${draggedLinkIndex === idx ? 'dragging' : ''} ${slidingLinks.has(idx) ? 'sliding' : ''}`}
+            >
               <a
                 href={link.url}
                 target="_blank"

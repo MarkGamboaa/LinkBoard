@@ -15,6 +15,8 @@ export default function DashboardPage({ onLogout, user: initialUser, onProfile }
   const [newLinkUrl, setNewLinkUrl] = useState("");
   const [newLinkColor, setNewLinkColor] = useState("#181f29");
   const [loading, setLoading] = useState(true);
+  const [draggedBoardIndex, setDraggedBoardIndex] = useState(null);
+  const [slidingBoards, setSlidingBoards] = useState(new Set());
 
   // Dynamically set columns based on number of boards
   const maxCols = 4;
@@ -72,6 +74,70 @@ export default function DashboardPage({ onLogout, user: initialUser, onProfile }
       console.error('Error fetching boards:', error);
     } finally {
       setLoading(false);
+    }
+  };
+
+  // Board drag and drop handlers
+  const handleBoardDragStart = (e, index) => {
+    setDraggedBoardIndex(index);
+    e.dataTransfer.effectAllowed = 'move';
+    e.dataTransfer.setData('text/html', e.target.outerHTML);
+  };
+
+  const handleBoardDragOver = (e) => {
+    e.preventDefault();
+    e.dataTransfer.dropEffect = 'move';
+  };
+
+  const handleBoardDrop = async (e, dropIndex) => {
+    e.preventDefault();
+    if (draggedBoardIndex === null || draggedBoardIndex === dropIndex) {
+      setDraggedBoardIndex(null);
+      return;
+    }
+
+    const newBoards = [...boards];
+    const draggedBoard = newBoards[draggedBoardIndex];
+    newBoards.splice(draggedBoardIndex, 1);
+    newBoards.splice(dropIndex, 0, draggedBoard);
+    
+    // Add sliding animation to all affected boards
+    const affectedIndices = new Set();
+    if (draggedBoardIndex < dropIndex) {
+      // Moving forward - animate boards in between
+      for (let i = draggedBoardIndex; i <= dropIndex; i++) {
+        affectedIndices.add(i);
+      }
+    } else {
+      // Moving backward - animate boards in between
+      for (let i = dropIndex; i <= draggedBoardIndex; i++) {
+        affectedIndices.add(i);
+      }
+    }
+    
+    setSlidingBoards(affectedIndices);
+    setBoards(newBoards);
+    setDraggedBoardIndex(null);
+
+    // Remove sliding animation after animation completes
+    setTimeout(() => {
+      setSlidingBoards(new Set());
+    }, 400);
+
+    // Update order in backend
+    try {
+      const updatePromises = newBoards.map((board, index) => 
+        fetch(`http://localhost:3001/api/boards/${board._id}`, {
+          method: 'PUT',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({ ...board, order: index })
+        })
+      );
+      await Promise.all(updatePromises);
+    } catch (error) {
+      console.error('Error updating board order:', error);
     }
   };
 
@@ -168,6 +234,30 @@ export default function DashboardPage({ onLogout, user: initialUser, onProfile }
     }
   };
 
+  // Reorder links handler
+  const handleReorderLinks = async (boardIdx, newLinks) => {
+    try {
+      const boardToUpdate = boards[boardIdx];
+      
+      const response = await fetch(`http://localhost:3001/api/boards/${boardToUpdate._id}`, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ ...boardToUpdate, links: newLinks })
+      });
+
+      if (response.ok) {
+        const updatedBoard = await response.json();
+        setBoards(boards => boards.map((board, i) => 
+          i === boardIdx ? updatedBoard : board
+        ));
+      }
+    } catch (error) {
+      console.error('Error reordering links:', error);
+    }
+  };
+
   // Add board handler
   const handleAddBoard = async () => {
     if (!newBoardTitle.trim()) return;
@@ -252,22 +342,31 @@ export default function DashboardPage({ onLogout, user: initialUser, onProfile }
         <ProfilePage user={user} onBack={() => setUser(u => ({ ...u, showProfile: false }))} onUserUpdate={setUser} />
       ) : (
       <main className="flex-1 flex flex-col items-center justify-start">
-        <div className="bg-white bg-opacity-60 rounded-xl sm:rounded-2xl shadow-xl w-full sm:w-[95vw] h-[calc(100vh-120px)] sm:h-[calc(100vh-115px)] max-w-full sm:max-w-[1800px] max-h-full sm:max-h-[900px] flex flex-col justify-center items-center p-2 sm:p-8 mt-0 mx-2 sm:mx-0">
+        <div className="bg-white bg-opacity-60 rounded-xl sm:rounded-2xl shadow-xl w-[calc(100vh-px)] h-[calc(100vh-120px)] sm:h-[calc(100vh-115px)] max-w-full max-h-full flex flex-col justify-center items-center p-2 sm:p-8 mt-0 mx-2 sm:mx-0 overflow-hidden">
           {/* Boards List */}
-          <Masonry
-            breakpointCols={breakpointColumnsObj}
-            className="my-masonry-grid w-full mb-4 max-h-[80vh] overflow-y-auto"
-            columnClassName="my-masonry-grid_column"
-          >
+                      <Masonry
+              breakpointCols={breakpointColumnsObj}
+              className="my-masonry-grid w-full mb-4 max-h-[80vh] overflow-y-auto overflow-x-hidden"
+              columnClassName="my-masonry-grid_column"
+            >
             {boards.map((board, idx) => (
-              <LinkCard
+              <div
                 key={board._id || idx}
-                category={board.title}
-                links={board.links || []}
-                onDelete={() => handleDeleteBoard(idx)}
-                onAddLink={() => handleAddLink(idx)}
-                onDeleteLink={linkIdx => handleDeleteLink(idx, linkIdx)}
-              />
+                draggable
+                onDragStart={(e) => handleBoardDragStart(e, idx)}
+                onDragOver={handleBoardDragOver}
+                onDrop={(e) => handleBoardDrop(e, idx)}
+                className={`draggable-board relative ${draggedBoardIndex === idx ? 'dragging' : ''} ${slidingBoards.has(idx) ? 'sliding' : ''}`}
+              >
+                <LinkCard
+                  category={board.title}
+                  links={board.links || []}
+                  onDelete={() => handleDeleteBoard(idx)}
+                  onAddLink={() => handleAddLink(idx)}
+                  onDeleteLink={linkIdx => handleDeleteLink(idx, linkIdx)}
+                  onReorderLinks={(newLinks) => handleReorderLinks(idx, newLinks)}
+                />
+              </div>
             ))}
           </Masonry>
           {/* Add Board Button */}
