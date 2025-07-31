@@ -1,8 +1,11 @@
 import React, { useState, useEffect } from "react";
 import LinkCard from "./LinkCard";
 import Masonry from "react-masonry-css";
+import { getUserProfileFromFirestore } from "./firebase";
 
-export default function DashboardPage({ onLogout, user }) {
+export default function DashboardPage({ onLogout, user: initialUser, onProfile }) {
+  const [user, setUser] = useState(initialUser);
+  const [userProfile, setUserProfile] = useState(null);
   const [menuOpen, setMenuOpen] = useState(false);
   const [boards, setBoards] = useState([]);
   const [modalOpen, setModalOpen] = useState(false);
@@ -24,15 +27,46 @@ export default function DashboardPage({ onLogout, user }) {
     500: 1
   };
 
-  // Fetch boards from API
+  // Fetch user profile and boards
   useEffect(() => {
+    fetchUserProfile();
     fetchBoards();
   }, []);
 
+  const fetchUserProfile = async () => {
+    try {
+      const result = await getUserProfileFromFirestore(user.uid);
+      if (result.success) {
+        setUserProfile(result.data);
+      }
+    } catch (error) {
+      console.error('Error loading user profile:', error);
+    }
+  };
+
+  // Helper function to get user's first name
+  const getUserFirstName = () => {
+    if (userProfile?.firstName) {
+      return userProfile.firstName;
+    }
+    if (user?.displayName) {
+      return user.displayName.split(' ')[0];
+    }
+    return 'User';
+  };
+
   const fetchBoards = async () => {
     try {
-      const response = await fetch('http://localhost:3001/api/boards');
+      console.log('Fetching boards for user:', user.uid);
+      const response = await fetch(`http://localhost:3001/api/boards?userId=${user.uid}`);
+      console.log('Fetch boards response status:', response.status);
+      
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`);
+      }
+      
       const data = await response.json();
+      console.log('Fetched boards data:', data);
       setBoards(data);
     } catch (error) {
       console.error('Error fetching boards:', error);
@@ -76,12 +110,15 @@ export default function DashboardPage({ onLogout, user }) {
       const boardToUpdate = boards[addLinkModal.boardIdx];
       const updatedLinks = [...(boardToUpdate.links || []), { title: newLinkTitle, url, color: newLinkColor }];
       
+      const updateData = { ...boardToUpdate, links: updatedLinks };
+      console.log('Sending board update data:', updateData);
+      
       const response = await fetch(`http://localhost:3001/api/boards/${boardToUpdate._id}`, {
         method: 'PUT',
         headers: {
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify({ ...boardToUpdate, links: updatedLinks })
+        body: JSON.stringify(updateData)
       });
 
       console.log('Response status:', response.status);
@@ -137,7 +174,12 @@ export default function DashboardPage({ onLogout, user }) {
     
     try {
       console.log('Creating board with title:', newBoardTitle);
-      const boardData = { title: newBoardTitle, links: [] };
+      const boardData = { 
+        title: newBoardTitle, 
+        links: [],
+        userId: user.uid,
+        userEmail: user.email
+      };
       console.log('Sending board data:', boardData);
       
       const response = await fetch('http://localhost:3001/api/boards', {
@@ -179,10 +221,10 @@ export default function DashboardPage({ onLogout, user }) {
         <h1 className="text-2xl sm:text-3xl font-bold text-primary">LinkBoard</h1>
         {/* Desktop menu */}
         <div className="hidden sm:flex gap-4 items-center">
-          <span className="btn btn-sm btn-ghost">
+          <button className="btn btn-sm btn-ghost" onClick={onProfile}>
             <svg className="inline-block w-5 h-5 mr-1" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><path d="M5.121 17.804A13.937 13.937 0 0112 15c2.5 0 4.847.655 6.879 1.804M15 11a3 3 0 11-6 0 3 3 0 016 0z" /></svg>
-            Hi, {user?.displayName || user?.email?.split("@") [0] || "User"}
-          </span>
+            Hi, {getUserFirstName()}
+          </button>
           <button className="btn btn-sm btn-white shadow" onClick={onLogout}>
             Logout <span className="ml-1">→</span>
           </button>
@@ -196,15 +238,19 @@ export default function DashboardPage({ onLogout, user }) {
           </button>
           {menuOpen && (
             <div className="absolute right-0 top-10 w-40 bg-white rounded-lg shadow-lg z-50 flex flex-col border border-gray-200">
-              <span className="px-4 py-2 flex items-center gap-2">
+              <button className="px-4 py-2 text-left hover:bg-gray-100 flex items-center gap-2" onClick={onProfile}>
                 <svg className="inline-block w-5 h-5" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><path d="M5.121 17.804A13.937 13.937 0 0112 15c2.5 0 4.847.655 6.879 1.804M15 11a3 3 0 11-6 0 3 3 0 016 0z" /></svg>
-                {user?.displayName || user?.email?.split("@") [0] || "User"}
-              </span>
+                Hi, {getUserFirstName()}
+              </button>
               <button className="px-4 py-2 text-left hover:bg-gray-100" onClick={onLogout}>Logout <span className="ml-1">→</span></button>
             </div>
           )}
         </div>
       </header>
+      {/* Render ProfilePage if needed, else main dashboard */}
+      {user && user.showProfile ? (
+        <ProfilePage user={user} onBack={() => setUser(u => ({ ...u, showProfile: false }))} onUserUpdate={setUser} />
+      ) : (
       <main className="flex-1 flex flex-col items-center justify-start">
         <div className="bg-white bg-opacity-60 rounded-xl sm:rounded-2xl shadow-xl w-full sm:w-[95vw] h-[calc(100vh-120px)] sm:h-[calc(100vh-115px)] max-w-full sm:max-w-[1800px] max-h-full sm:max-h-[900px] flex flex-col justify-center items-center p-2 sm:p-8 mt-0 mx-2 sm:mx-0">
           {/* Boards List */}
@@ -270,7 +316,7 @@ export default function DashboardPage({ onLogout, user }) {
               />
               <input
                 className="input input-bordered bg-white/60 backdrop-blur placeholder:text-gray-500"
-                placeholder="URL (include https://)"
+                placeholder="URL (www.example.com)"
                 value={newLinkUrl}
                 onChange={e => setNewLinkUrl(e.target.value)}
               />
@@ -297,6 +343,7 @@ export default function DashboardPage({ onLogout, user }) {
           </div>
         )}
       </main>
+      )}
     </div>
   );
 }

@@ -25,7 +25,7 @@ export default function LandingPage({ onSignup, onLogin }) {
                             </svg>
                         </div>
                         <p className="mb-8 text-lg text-gray-700">
-                            can create customizable boards to organize your favorite tools, articles, videos, and anything else worth saving all in one clean dashboard.
+                            Create customizable boards and organize your favorite tools, articles, videos, and anything else worth saving all in one clean dashboard.
                         </p>
                         <div className="flex gap-4">
                             <button className="btn btn-primary text-lg px-8" onClick={onSignup}>Get Started</button>
