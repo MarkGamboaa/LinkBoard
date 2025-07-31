@@ -342,7 +342,7 @@ export default function DashboardPage({ onLogout, user: initialUser, onProfile }
         <ProfilePage user={user} onBack={() => setUser(u => ({ ...u, showProfile: false }))} onUserUpdate={setUser} />
       ) : (
       <main className="flex-1 flex flex-col items-center justify-start">
-        <div className="bg-white bg-opacity-60 rounded-xl sm:rounded-2xl shadow-xl w-[calc(100vh-px)] h-[calc(100vh-120px)] sm:h-[calc(100vh-115px)] max-w-full max-h-full flex flex-col justify-center items-center p-2 sm:p-8 mt-0 mx-2 sm:mx-0 overflow-hidden">
+        <div className="bg-white bg-opacity-60 rounded-xl sm:rounded-2xl shadow-xl w-full sm:w-[95vw] h-[calc(100vh-120px)] sm:h-[calc(100vh-115px)] max-w-full sm:max-w-[1800px] max-h-full sm:max-h-[900px] flex flex-col justify-center items-center p-2 sm:p-8 mt-0 mx-2 sm:mx-0 overflow-hidden">
           {/* Boards List */}
                       <Masonry
               breakpointCols={breakpointColumnsObj}
@@ -446,3 +446,4 @@ export default function DashboardPage({ onLogout, user: initialUser, onProfile }
     </div>
   );
 }
+  
