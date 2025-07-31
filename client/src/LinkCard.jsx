@@ -12,6 +12,48 @@ export default function LinkCard({
   // Add a little extra for padding/borders if needed
   const maxLinkAreaHeight = 224;
 
+  // Function to determine if a color is dark or light
+  const isColorDark = (color) => {
+    // Handle hex colors
+    if (color.startsWith('#')) {
+      const hex = color.replace('#', '');
+      const r = parseInt(hex.substr(0, 2), 16);
+      const g = parseInt(hex.substr(2, 2), 16);
+      const b = parseInt(hex.substr(4, 2), 16);
+      const brightness = (r * 299 + g * 587 + b * 114) / 1000;
+      return brightness < 128;
+    }
+    // Handle rgb/rgba colors
+    if (color.startsWith('rgb')) {
+      const rgb = color.match(/\d+/g);
+      if (rgb && rgb.length >= 3) {
+        const r = parseInt(rgb[0]);
+        const g = parseInt(rgb[1]);
+        const b = parseInt(rgb[2]);
+        const brightness = (r * 299 + g * 587 + b * 114) / 1000;
+        return brightness < 128;
+      }
+    }
+    // Default to dark for unknown colors
+    return true;
+  };
+
+  // Function to get delete button styling based on background color
+  const getDeleteButtonStyle = (backgroundColor) => {
+    const isDark = isColorDark(backgroundColor);
+    return isDark 
+      ? "text-white hover:text-gray-300" 
+      : "text-black hover:text-gray-700";
+  };
+
+  // Function to get link styling based on background color
+  const getLinkStyle = (backgroundColor) => {
+    const isDark = isColorDark(backgroundColor);
+    return isDark 
+      ? "text-white" 
+      : "text-black border border-gray-300";
+  };
+
   return (
     <div className="bg-white rounded-xl shadow-lg p-4 w-80 flex flex-col items-center relative">
       {/* Category and Delete */}
@@ -34,14 +76,14 @@ export default function LinkCard({
                 target="_blank"
                 rel="noopener noreferrer"
                 style={{ background: link.color || '#181f29' }}
-                className="rounded-lg px-3 py-2 w-full block text-white no-underline hover:opacity-90 transition-opacity duration-150 pr-8"
+                className={`rounded-lg px-3 py-2 w-full block no-underline hover:opacity-90 transition-opacity duration-150 pr-8 ${getLinkStyle(link.color || '#181f29')}`}
               >
                 <span className="font-semibold truncate block">{link.title}</span>
                 <span className="text-xs truncate block">{link.url}</span>
               </a>
               <button
                 onClick={() => onDeleteLink && onDeleteLink(idx)}
-                className="absolute top-2 right-2 text-red-300 hover:text-red-600 text-lg font-bold bg-transparent border-none p-0 m-0 cursor-pointer opacity-80 group-hover:opacity-100"
+                className={`absolute top-2 right-2 text-lg font-bold bg-transparent border-none p-0 m-0 cursor-pointer opacity-80 group-hover:opacity-100 ${getDeleteButtonStyle(link.color || '#181f29')}`}
                 title="Delete Link"
                 tabIndex={-1}
               >
@@ -54,7 +96,7 @@ export default function LinkCard({
       {/* Add Link Button */}
       <button
         onClick={onAddLink}
-        className="bg-[#4632e6] hover:bg-[#3620b7] text-white font-semibold rounded-full px-8 py-3 flex items-center gap-2 text-lg shadow-md transition-colors duration-150"
+        className="bg-[#4632e6] hover:bg-[#3620b7] text-white font-semibold rounded-full px-5 py-1 flex items-center gap-2 text-m shadow-md transition-colors duration-150"
       >
         Add Link <span className="text-2xl">＋</span>
       </button>

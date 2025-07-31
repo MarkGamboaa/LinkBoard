@@ -1,6 +1,6 @@
 import React, { useState } from "react";
 import { createUserWithEmailAndPassword, updateProfile } from "firebase/auth";
-import { auth } from "./firebase";
+import { auth, validatePassword, updateUserProfile } from "./firebase";
 
 export default function SignupPage({ onBack, onLogin }) {
   const [firstName, setFirstName] = useState("");
@@ -14,10 +14,26 @@ export default function SignupPage({ onBack, onLogin }) {
     e.preventDefault();
     setError("");
     setSuccess("");
+
+    // Validate password
+    const validation = validatePassword(password);
+    if (!validation.valid) {
+      setError(validation.message);
+      return;
+    }
+
     try {
       const userCredential = await createUserWithEmailAndPassword(auth, email, password);
+      
       // Save both first and last name in displayName
       await updateProfile(userCredential.user, { displayName: `${firstName} ${lastName}`.trim() });
+      
+      // Save profile data to MongoDB
+      const profileResult = await updateUserProfile(firstName.trim(), lastName.trim());
+      if (!profileResult.success) {
+        console.error('Failed to save profile to MongoDB:', profileResult.message);
+      }
+      
       setSuccess("Account created! Redirecting to login...");
       setFirstName(""); setLastName(""); setEmail(""); setPassword("");
       setTimeout(() => {
@@ -57,7 +73,12 @@ export default function SignupPage({ onBack, onLogin }) {
               <input type="text" placeholder="First name" className="input input-bordered w-full" value={firstName} onChange={e => setFirstName(e.target.value)} />
               <input type="text" placeholder="Last name" className="input input-bordered w-full" value={lastName} onChange={e => setLastName(e.target.value)} />
               <input type="email" placeholder="Email" className="input input-bordered w-full" value={email} onChange={e => setEmail(e.target.value)} />
-              <input type="password" placeholder="Password" className="input input-bordered w-full" value={password} onChange={e => setPassword(e.target.value)} />
+              <div>
+                <input type="password" placeholder="Password" className="input input-bordered w-full" value={password} onChange={e => setPassword(e.target.value)} />
+                <div className="text-xs text-gray-500 mt-1">
+                  Must be at least 8 characters with 1 uppercase letter and 1 special character
+                </div>
+              </div>
               <button type="submit" className="btn btn-primary w-full text-base sm:text-lg mt-2">Create account</button>
               {error && <div className="text-red-500 text-sm mt-2">{error}</div>}
               {success && <div className="text-green-600 text-sm mt-2">{success}</div>}
