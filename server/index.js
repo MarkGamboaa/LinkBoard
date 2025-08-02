@@ -236,6 +236,15 @@ app.get('/api/test', (req, res) => {
   });
 });
 
+// Root endpoint for basic health check
+app.get('/', (req, res) => {
+  res.json({ 
+    message: 'LinkBoard API is running', 
+    status: 'healthy',
+    timestamp: new Date().toISOString()
+  });
+});
+
 // Test endpoint to check MongoDB connection and create a test board
 app.get('/api/test-mongo', async (req, res) => {
   try {
