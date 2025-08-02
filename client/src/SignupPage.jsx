@@ -1,6 +1,7 @@
 import React, { useState } from "react";
 import { createUserWithEmailAndPassword, updateProfile } from "firebase/auth";
 import { auth, validatePassword, updateUserProfile } from "./firebase";
+import LinkBoardLogo from "./assets/linkboardlogo.svg";
 
 export default function SignupPage({ onBack, onLogin }) {
   const [firstName, setFirstName] = useState("");
@@ -70,6 +71,9 @@ export default function SignupPage({ onBack, onLogin }) {
         {/* Right Section (Signup Card) */}
         <div className="w-full lg:w-1/2 flex justify-center items-center">
           <div className="bg-white rounded-2xl shadow-xl p-6 sm:p-10 w-full max-w-md flex flex-col justify-center">
+            <div className="w-16 h-16 mx-auto mb-4 flex items-center justify-center">
+              <img src={LinkBoardLogo} alt="LinkBoard Logo" className="w-full h-full object-contain" />
+            </div>
             <div className="flex justify-between items-center mb-6">
               <h2 className="text-xl sm:text-2xl font-bold">Create an account</h2>
               <button className="underline text-sm" onClick={onLogin}>log in instead</button>
