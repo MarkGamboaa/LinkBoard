@@ -39,11 +39,11 @@ export default function LoginPage({ onBack, onSignup, onLogin }) {
           <form className="w-full flex flex-col gap-4" onSubmit={handleSubmit}>
             <div>
               <label className="block text-sm mb-1" htmlFor="email">Your email</label>
-              <input id="email" type="email" placeholder="Your email" className="input input-bordered w-full" value={email} onChange={e => setEmail(e.target.value)} />
+              <input id="email" type="email" placeholder="Your email" className="input input-bordered w-full input-enhanced enhanced-focus" value={email} onChange={e => setEmail(e.target.value)} />
             </div>
             <div className="relative">
               <label className="block text-sm mb-1" htmlFor="password">Your password</label>
-              <input id="password" type={showPassword ? "text" : "password"} placeholder="Your password" className="input input-bordered w-full pr-16" value={password} onChange={e => setPassword(e.target.value)} />
+              <input id="password" type={showPassword ? "text" : "password"} placeholder="Your password" className="input input-bordered w-full pr-16 input-enhanced enhanced-focus" value={password} onChange={e => setPassword(e.target.value)} />
               <span className="absolute right-3 top-8 flex items-center text-gray-400 cursor-pointer select-none" onClick={() => setShowPassword(v => !v)}>
                 {showPassword ? (
                   // Eye-off icon (Heroicons outline)
@@ -63,7 +63,16 @@ export default function LoginPage({ onBack, onSignup, onLogin }) {
                 )}
               </span>
             </div>
-            <button type="submit" className="btn btn-primary w-full text-lg mt-2" disabled={loading}>{loading ? "Logging in..." : "Log In"}</button>
+            <button type="submit" className={`btn btn-primary w-full text-lg mt-2 button-press ${loading ? 'enhanced-button-loading' : ''}`} disabled={loading}>
+              {loading ? (
+                <>
+                  <span className="enhanced-button-spinner w-4 h-4"></span>
+                  Logging in...
+                </>
+              ) : (
+                "Log In"
+              )}
+            </button>
             {error && <div className="text-red-500 text-sm mt-2">{error}</div>}
             <p className="text-center text-gray-500 mt-4 text-sm">
               Don't have an account?{' '}

@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from "react";
 import LinkCard from "./LinkCard";
 import Masonry from "react-masonry-css";
+import LoadingSpinner from "./components/LoadingSpinner.jsx";
 import { getUserProfileFromFirestore } from "./firebase";
 
 export default function DashboardPage({ onLogout, user: initialUser, onProfile }) {
@@ -15,6 +16,9 @@ export default function DashboardPage({ onLogout, user: initialUser, onProfile }
   const [newLinkUrl, setNewLinkUrl] = useState("");
   const [newLinkColor, setNewLinkColor] = useState("#181f29");
   const [loading, setLoading] = useState(true);
+  const [logoutLoading, setLogoutLoading] = useState(false);
+  const [addingLinkLoading, setAddingLinkLoading] = useState(false);
+  const [deletingLinkLoading, setDeletingLinkLoading] = useState(false);
   const [draggedBoardIndex, setDraggedBoardIndex] = useState(null);
   const [slidingBoards, setSlidingBoards] = useState(new Set());
 
@@ -160,6 +164,7 @@ export default function DashboardPage({ onLogout, user: initialUser, onProfile }
     setNewLinkTitle("");
     setNewLinkUrl("");
     setNewLinkColor("#181f29");
+    setAddingLinkLoading(true);
   };
 
   // Confirm add link
@@ -206,11 +211,13 @@ export default function DashboardPage({ onLogout, user: initialUser, onProfile }
       setNewLinkTitle("");
       setNewLinkUrl("");
       setNewLinkColor("#181f29");
+      setAddingLinkLoading(false);
     }
   };
 
   // Delete link handler
   const handleDeleteLink = async (boardIdx, linkIdx) => {
+    setDeletingLinkLoading(true);
     try {
       const boardToUpdate = boards[boardIdx];
       const updatedLinks = boardToUpdate.links.filter((_, lIdx) => lIdx !== linkIdx);
@@ -231,6 +238,8 @@ export default function DashboardPage({ onLogout, user: initialUser, onProfile }
       }
     } catch (error) {
       console.error('Error deleting link:', error);
+    } finally {
+      setDeletingLinkLoading(false);
     }
   };
 
@@ -255,6 +264,17 @@ export default function DashboardPage({ onLogout, user: initialUser, onProfile }
       }
     } catch (error) {
       console.error('Error reordering links:', error);
+    }
+  };
+
+  // Logout handler with loading state
+  const handleLogout = async () => {
+    setLogoutLoading(true);
+    try {
+      await onLogout();
+    } catch (error) {
+      console.error('Error during logout:', error);
+      setLogoutLoading(false);
     }
   };
 
@@ -298,51 +318,68 @@ export default function DashboardPage({ onLogout, user: initialUser, onProfile }
   };
 
   if (loading) {
-    return (
-      <div className="min-h-screen bg-gradient-to-br from-[#e3efff] to-[#b3d0f7] flex items-center justify-center">
-        <div className="text-xl">Loading...</div>
-      </div>
-    );
+    return <LoadingSpinner fullScreen text="Loading your boards..." />;
   }
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-[#e3efff] to-[#b3d0f7] flex flex-col">
-      <header className="flex flex-row justify-between items-center p-4 sm:p-6 gap-2 sm:gap-0">
-        <h1 className="text-2xl sm:text-3xl font-bold text-primary">LinkBoard</h1>
-        {/* Desktop menu */}
-        <div className="hidden sm:flex gap-4 items-center">
-          <button className="btn btn-sm btn-ghost" onClick={onProfile}>
-            <svg className="inline-block w-5 h-5 mr-1" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><path d="M5.121 17.804A13.937 13.937 0 0112 15c2.5 0 4.847.655 6.879 1.804M15 11a3 3 0 11-6 0 3 3 0 016 0z" /></svg>
-            Hi, {getUserFirstName()}
-          </button>
-          <button className="btn btn-sm btn-white shadow" onClick={onLogout}>
-            Logout <span className="ml-1">→</span>
-          </button>
-        </div>
-        {/* Mobile menu */}
-        <div className="sm:hidden flex items-center relative">
-          <button className="btn btn-sm btn-ghost" onClick={() => setMenuOpen(v => !v)} aria-label="Open menu">
-            <svg className="w-6 h-6" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" d="M4 6h16M4 12h16M4 18h16" />
-            </svg>
-          </button>
-          {menuOpen && (
-            <div className="absolute right-0 top-10 w-40 bg-white rounded-lg shadow-lg z-50 flex flex-col border border-gray-200">
-              <button className="px-4 py-2 text-left hover:bg-gray-100 flex items-center gap-2" onClick={onProfile}>
-                <svg className="inline-block w-5 h-5" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><path d="M5.121 17.804A13.937 13.937 0 0112 15c2.5 0 4.847.655 6.879 1.804M15 11a3 3 0 11-6 0 3 3 0 016 0z" /></svg>
-                Hi, {getUserFirstName()}
-              </button>
-              <button className="px-4 py-2 text-left hover:bg-gray-100" onClick={onLogout}>Logout <span className="ml-1">→</span></button>
-            </div>
-          )}
-        </div>
-      </header>
-      {/* Render ProfilePage if needed, else main dashboard */}
-      {user && user.showProfile ? (
-        <ProfilePage user={user} onBack={() => setUser(u => ({ ...u, showProfile: false }))} onUserUpdate={setUser} />
-      ) : (
-      <main className="flex-1 flex flex-col items-center justify-start">
-        <div className="bg-white bg-opacity-60 rounded-xl sm:rounded-2xl shadow-xl w-full sm:w-[95vw] h-[calc(100vh-120px)] sm:h-[calc(100vh-115px)] max-w-full sm:max-w-[1800px] max-h-full sm:max-h-[900px] flex flex-col justify-center items-center p-2 sm:p-8 mt-0 mx-2 sm:mx-0 overflow-hidden">
+      <div className="max-w-[1800px] mx-auto w-full">
+        <header className="flex flex-row justify-between items-center p-4 sm:p-6 gap-2 sm:gap-0">
+          <h1 className="text-2xl sm:text-3xl font-bold text-primary">LinkBoard</h1>
+          {/* Desktop menu */}
+          <div className="hidden sm:flex gap-4 items-center">
+            <button className="btn btn-sm btn-ghost" onClick={onProfile}>
+              <svg className="inline-block w-5 h-5 mr-1" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><path d="M5.121 17.804A13.937 13.937 0 0112 15c2.5 0 4.847.655 6.879 1.804M15 11a3 3 0 11-6 0 3 3 0 016 0z" /></svg>
+              Hi, {getUserFirstName()}
+            </button>
+            <button className={`btn btn-sm btn-white shadow ${logoutLoading ? 'enhanced-button-loading' : ''}`} onClick={handleLogout} disabled={logoutLoading}>
+              {logoutLoading ? (
+                <>
+                  <span className="enhanced-button-spinner w-3 h-3"></span>
+                  Logging out...
+                </>
+              ) : (
+                <>
+                  Logout <span className="ml-1">→</span>
+                </>
+              )}
+            </button>
+          </div>
+          {/* Mobile menu */}
+          <div className="sm:hidden flex items-center relative">
+            <button className="btn btn-sm btn-ghost" onClick={() => setMenuOpen(v => !v)} aria-label="Open menu">
+              <svg className="w-6 h-6" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" d="M4 6h16M4 12h16M4 18h16" />
+              </svg>
+            </button>
+            {menuOpen && (
+              <div className="absolute right-0 top-10 w-40 bg-white rounded-lg shadow-lg z-50 flex flex-col border border-gray-200">
+                <button className="px-4 py-2 text-left hover:bg-gray-100 flex items-center gap-2" onClick={onProfile}>
+                  <svg className="inline-block w-5 h-5" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><path d="M5.121 17.804A13.937 13.937 0 0112 15c2.5 0 4.847.655 6.879 1.804M15 11a3 3 0 11-6 0 3 3 0 016 0z" /></svg>
+                  Hi, {getUserFirstName()}
+                </button>
+                <button className={`px-4 py-2 text-left hover:bg-gray-100 ${logoutLoading ? 'enhanced-button-loading' : ''}`} onClick={handleLogout} disabled={logoutLoading}>
+                  {logoutLoading ? (
+                    <>
+                      <span className="enhanced-button-spinner w-3 h-3"></span>
+                      Logging out...
+                    </>
+                  ) : (
+                    <>
+                      Logout <span className="ml-1">→</span>
+                    </>
+                  )}
+                </button>
+              </div>
+            )}
+          </div>
+        </header>
+        {/* Render ProfilePage if needed, else main dashboard */}
+        {user && user.showProfile ? (
+          <ProfilePage user={user} onBack={() => setUser(u => ({ ...u, showProfile: false }))} onUserUpdate={setUser} />
+        ) : (
+        <main className="flex-1 flex flex-col items-center justify-start px-4 sm:px-6">
+          <div className="bg-white bg-opacity-60 rounded-xl sm:rounded-2xl shadow-xl w-full h-[calc(100vh-120px)] sm:h-[calc(100vh-115px)] max-h-full sm:max-h-[900px] flex flex-col justify-center items-center p-2 sm:p-8 mt-0 overflow-hidden">
           {/* Boards List */}
                       <Masonry
               breakpointCols={breakpointColumnsObj}
@@ -365,6 +402,8 @@ export default function DashboardPage({ onLogout, user: initialUser, onProfile }
                   onAddLink={() => handleAddLink(idx)}
                   onDeleteLink={linkIdx => handleDeleteLink(idx, linkIdx)}
                   onReorderLinks={(newLinks) => handleReorderLinks(idx, newLinks)}
+                  isAddingLink={addingLinkLoading && addLinkModal.boardIdx === idx}
+                  isDeletingLink={deletingLinkLoading}
                 />
               </div>
             ))}
@@ -443,6 +482,7 @@ export default function DashboardPage({ onLogout, user: initialUser, onProfile }
         )}
       </main>
       )}
+      </div>
     </div>
   );
 }
