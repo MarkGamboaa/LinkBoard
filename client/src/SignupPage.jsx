@@ -62,7 +62,7 @@ export default function SignupPage({ onBack, onLogin }) {
         {/* Left Section (h1 and p) */}
         <div className="w-full lg:w-1/2 flex flex-col justify-center items-center lg:items-end pr-0 text-center lg:text-right mb-8 lg:mb-0">
           <h1 className="text-3xl sm:text-4xl md:text-5xl font-black leading-tight mb-4">
-            Join <span className="text-primary">LinkBoard</span> and<br />start organizing smarter
+                            Join <span className="text-primary font-logo">LinkBoard</span> and<br />start organizing smarter
           </h1>
           <p className="text-base sm:text-lg text-gray-700 max-w-md">
             Sign up in seconds. Save links, create boards, and take control of your digital space all in one place.

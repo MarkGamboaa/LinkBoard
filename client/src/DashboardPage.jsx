@@ -354,7 +354,7 @@ export default function DashboardPage({ onLogout, user: initialUser, onProfile, 
     <div className="min-h-screen bg-gradient-to-br from-[#e3efff] to-[#b3d0f7] flex flex-col">
       <div className="max-w-[1800px] mx-auto w-full">
         <header className="flex flex-row justify-between items-center p-4 sm:p-6 gap-2 sm:gap-0">
-          <h1 className="text-2xl sm:text-3xl font-bold text-primary">LinkBoard</h1>
+                      <h1 className="text-2xl sm:text-3xl font-bold text-primary font-logo">LinkBoard</h1>
           {/* Desktop menu */}
           <div className="hidden sm:flex gap-4 items-center">
             <button className="btn btn-sm btn-ghost" onClick={onPublic}>

@@ -4,7 +4,7 @@ export default function LandingPage({ onSignup, onLogin, onPublic }) {
             <div className="w-full max-w-[1600px] mx-auto">
                 {/* Navbar */}
                 <div className="navbar bg-transparent px-4 sm:px-8 pt-6 flex justify-between">
-                    <a className="text-3xl font-bold text-primary">LinkBoard</a>
+                    <a className="text-3xl font-bold text-primary font-logo">LinkBoard</a>
                     <div className="flex gap-2">
                         <button className="btn btn-ghost" onClick={onLogin}>Login</button>
                         <button className="btn btn-primary" onClick={onSignup}>Sign Up</button>
@@ -17,7 +17,7 @@ export default function LandingPage({ onSignup, onLogin, onPublic }) {
                     {/* Left Section */}
                     <div className="w-full max-w-xl flex flex-col items-center lg:items-start text-center lg:text-left">
                         <h1 className="text-5xl md:text-6xl font-black leading-tight mb-4">
-                            With <span className="text-primary">LinkBoard</span><br />Increase your<br />Productivity
+                            With <span className="text-primary font-logo">LinkBoard</span><br />Increase your<br />Productivity
                         </h1>
                         <div className="w-40 md:w-72 h-2 bg-transparent mb-6">
                             <svg width="100%" height="16" viewBox="0 0 320 16" fill="none" xmlns="http://www.w3.org/2000/svg">
