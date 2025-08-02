@@ -26,8 +26,7 @@
 }
 
 .draggable-board:hover {
-  transform: translateY(-2px);
-  box-shadow: 0 8px 25px rgba(0, 0, 0, 0.15);
+  /* Removed hover effects */
 }
 
 .draggable-board:active {
@@ -41,7 +40,6 @@
   transition: none;
   cursor: grabbing;
   transform: scale(1.02);
-  box-shadow: 0 12px 30px rgba(0, 0, 0, 0.25);
 }
 
 /* Smooth sliding animation for boards */
@@ -57,8 +55,7 @@
 }
 
 .draggable-link:hover {
-  transform: translateX(2px);
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+  transform: translateY(-2px);
 }
 
 .draggable-link:active {
@@ -72,7 +69,6 @@
   transition: none;
   cursor: grabbing;
   transform: scale(1.02);
-  box-shadow: 0 8px 20px rgba(0, 0, 0, 0.2);
 }
 
 /* Smooth sliding animation for links */
@@ -459,7 +455,6 @@
 
 .hover-lift:hover {
   animation: hover-lift 0.2s ease forwards;
-  box-shadow: 0 8px 25px rgba(0, 0, 0, 0.15);
 }
 
 .button-press:active {
@@ -513,7 +508,6 @@
 
 .card-hover:hover {
   transform: translateY(-4px);
-  box-shadow: 0 12px 30px rgba(0, 0, 0, 0.15);
 }
 
 /* Smooth Scrolling */
