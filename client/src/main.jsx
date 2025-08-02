@@ -7,6 +7,7 @@ import SignupPage from './SignupPage.jsx';
 import LoginPage from './LoginPage.jsx';
 import DashboardPage from './DashboardPage.jsx';
 import ProfilePage from './ProfilePage.jsx';
+import LoadingSpinner from './components/LoadingSpinner.jsx';
 import { auth } from './firebase';
 import { onAuthStateChanged } from 'firebase/auth';
 
@@ -26,12 +27,24 @@ function App() {
     return () => unsubscribe();
   }, []);
 
-  if (loading) return null;
+  if (loading) {
+    return <LoadingSpinner fullScreen text="Initializing..." />;
+  }
+
+  const handleLogout = async () => {
+    try {
+      await auth.signOut();
+      setUser(null);
+      setPage('landing');
+    } catch (error) {
+      console.error('Error during logout:', error);
+    }
+  };
 
   if (page === 'dashboard' && user) {
     return <DashboardPage 
       user={user} 
-      onLogout={() => { auth.signOut(); setUser(null); setPage('landing'); }}
+      onLogout={handleLogout}
       onProfile={() => setPage('profile')}
     />;
   }
@@ -39,7 +52,7 @@ function App() {
     return <ProfilePage 
       user={user} 
       onBack={() => setPage('dashboard')}
-      onLogout={() => { auth.signOut(); setUser(null); setPage('landing'); }}
+      onLogout={handleLogout}
       onUserUpdate={(updatedUser) => {
         console.log('Main App - onUserUpdate called with:', updatedUser);
         console.log('Main App - updatedUser.photoURL:', updatedUser?.photoURL);

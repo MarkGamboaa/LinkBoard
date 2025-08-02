@@ -6,7 +6,9 @@ export default function LinkCard({
   onDelete,
   onAddLink,
   onDeleteLink,
-  onReorderLinks
+  onReorderLinks,
+  isAddingLink = false,
+  isDeletingLink = false
 }) {
   const [draggedLinkIndex, setDraggedLinkIndex] = useState(null);
   const [slidingLinks, setSlidingLinks] = useState(new Set());
@@ -109,7 +111,7 @@ export default function LinkCard({
   };
 
   return (
-    <div className="bg-white rounded-xl shadow-lg p-4 w-80 flex flex-col items-center relative">
+    <div className="bg-white rounded-xl shadow-lg p-4 w-80 flex flex-col items-center relative card-hover card-enter">
       {/* Category and Delete */}
       <div className="w-full flex justify-between items-center mb-4">
         <span className="text-blue-700 font-bold text-lg">{category}</span>
@@ -144,11 +146,16 @@ export default function LinkCard({
               </a>
               <button
                 onClick={() => onDeleteLink && onDeleteLink(idx)}
-                className={`absolute top-2 right-2 text-lg font-bold bg-transparent border-none p-0 m-0 cursor-pointer opacity-80 group-hover:opacity-100 ${getDeleteButtonStyle(link.color || '#181f29')}`}
+                disabled={isDeletingLink}
+                className={`absolute top-2 right-2 text-lg font-bold bg-transparent border-none p-0 m-0 cursor-pointer opacity-80 group-hover:opacity-100 disabled:opacity-50 disabled:cursor-not-allowed ${getDeleteButtonStyle(link.color || '#181f29')}`}
                 title="Delete Link"
                 tabIndex={-1}
               >
-                &#10005;
+                {isDeletingLink ? (
+                  <span className="enhanced-button-spinner w-3 h-3"></span>
+                ) : (
+                  <span>&#10005;</span>
+                )}
               </button>
             </div>
           ))}
@@ -157,9 +164,19 @@ export default function LinkCard({
       {/* Add Link Button */}
       <button
         onClick={onAddLink}
-        className="bg-[#4632e6] hover:bg-[#3620b7] text-white font-semibold rounded-full px-5 py-1 flex items-center gap-2 text-m shadow-md transition-colors duration-150"
+        disabled={isAddingLink}
+        className={`bg-[#4632e6] hover:bg-[#3620b7] text-white font-semibold rounded-full px-5 py-1 flex items-center gap-2 text-m shadow-md transition-colors duration-150 disabled:opacity-50 disabled:cursor-not-allowed button-press ${isAddingLink ? 'enhanced-button-loading' : ''}`}
       >
-        Add Link <span className="text-2xl">＋</span>
+        {isAddingLink ? (
+          <>
+            <span className="enhanced-button-spinner w-3 h-3"></span>
+            Adding...
+          </>
+        ) : (
+          <>
+            Add Link <span className="text-2xl">＋</span>
+          </>
+        )}
       </button>
     </div>
   );

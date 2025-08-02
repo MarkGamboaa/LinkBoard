@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useRef } from "react";
 import { updateUserProfile, getUserProfileFromFirestore, uploadProfileImage, deleteProfileImage, changeUserPassword, validatePassword, deleteUserAccount } from "./firebase";
+import LoadingSpinner from "./components/LoadingSpinner.jsx";
 
 import { auth } from "./firebase";
 export default function ProfilePage({ user, onBack, onLogout, onUserUpdate }) {
@@ -22,6 +23,7 @@ export default function ProfilePage({ user, onBack, onLogout, onUserUpdate }) {
   const [deletePassword, setDeletePassword] = useState('');
   const [deletingAccount, setDeletingAccount] = useState(false);
   const [deleteError, setDeleteError] = useState('');
+  const [logoutLoading, setLogoutLoading] = useState(false);
   const fileInputRef = useRef(null);
 
   // Debug logging for user prop changes
@@ -253,6 +255,16 @@ export default function ProfilePage({ user, onBack, onLogout, onUserUpdate }) {
     setDeleteError('');
   };
 
+  const handleLogout = async () => {
+    setLogoutLoading(true);
+    try {
+      await onLogout();
+    } catch (error) {
+      console.error('Error during logout:', error);
+      setLogoutLoading(false);
+    }
+  };
+
   const handleConfirmDeleteAccount = async () => {
     // Clear previous errors
     setDeleteError('');
@@ -283,52 +295,69 @@ export default function ProfilePage({ user, onBack, onLogout, onUserUpdate }) {
   };
 
   if (loading) {
-    return (
-      <div className="min-h-screen bg-gradient-to-br from-[#e3efff] to-[#b3d0f7] flex items-center justify-center">
-        <div className="text-xl">Loading profile...</div>
-      </div>
-    );
+    return <LoadingSpinner fullScreen text="Loading profile..." />;
   }
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-[#e3efff] to-[#b3d0f7] flex flex-col">
-      <header className="flex flex-row justify-between items-center p-4 sm:p-6 gap-2 sm:gap-0">
-        <h1 className="text-2xl sm:text-3xl font-bold text-primary">LinkBoard</h1>
-        {/* Desktop menu */}
-        <div className="hidden sm:flex gap-4 items-center">
-          <button className="btn btn-sm btn-ghost" onClick={onBack}>
-            <svg className="inline-block w-5 h-5 mr-1" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" d="M15 19l-7-7 7-7" />
-            </svg>
-            Back
-          </button>
-          <button className="btn btn-sm btn-white shadow" onClick={onLogout}>
-            Logout <span className="ml-1">→</span>
-          </button>
-        </div>
-        {/* Mobile menu */}
-        <div className="sm:hidden flex items-center relative">
-          <button className="btn btn-sm btn-ghost" onClick={() => setMenuOpen(v => !v)} aria-label="Open menu">
-            <svg className="w-6 h-6" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" d="M4 6h16M4 12h16M4 18h16" />
-            </svg>
-          </button>
-          {menuOpen && (
-            <div className="absolute right-0 top-10 w-40 bg-white rounded-lg shadow-lg z-50 flex flex-col border border-gray-200">
-              <button className="px-4 py-2 text-left hover:bg-gray-100" onClick={onBack}>
-                <svg className="inline-block w-5 h-5 mr-1" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" d="M15 19l-7-7 7-7" />
-                </svg>
-                Back
-              </button>
-              <button className="px-4 py-2 text-left hover:bg-gray-100" onClick={onLogout}>Logout <span className="ml-1">→</span></button>
-            </div>
-          )}
-        </div>
-      </header>
+      <div className="max-w-[1800px] mx-auto w-full">
+        <header className="flex flex-row justify-between items-center p-4 sm:p-6 gap-2 sm:gap-0">
+          <h1 className="text-2xl sm:text-3xl font-bold text-primary">LinkBoard</h1>
+          {/* Desktop menu */}
+          <div className="hidden sm:flex gap-4 items-center">
+            <button className="btn btn-sm btn-ghost" onClick={onBack}>
+              <svg className="inline-block w-5 h-5 mr-1" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" d="M15 19l-7-7 7-7" />
+              </svg>
+              Back
+            </button>
+            <button className={`btn btn-sm btn-white shadow ${logoutLoading ? 'enhanced-button-loading' : ''}`} onClick={handleLogout} disabled={logoutLoading}>
+              {logoutLoading ? (
+                <>
+                  <span className="enhanced-button-spinner w-3 h-3"></span>
+                  Logging out...
+                </>
+              ) : (
+                <>
+                  Logout <span className="ml-1">→</span>
+                </>
+              )}
+            </button>
+          </div>
+          {/* Mobile menu */}
+          <div className="sm:hidden flex items-center relative">
+            <button className="btn btn-sm btn-ghost" onClick={() => setMenuOpen(v => !v)} aria-label="Open menu">
+              <svg className="w-6 h-6" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" d="M4 6h16M4 12h16M4 18h16" />
+              </svg>
+            </button>
+            {menuOpen && (
+              <div className="absolute right-0 top-10 w-40 bg-white rounded-lg shadow-lg z-50 flex flex-col border border-gray-200">
+                <button className="px-4 py-2 text-left hover:bg-gray-100" onClick={onBack}>
+                  <svg className="inline-block w-5 h-5 mr-1" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M15 19l-7-7 7-7" />
+                  </svg>
+                  Back
+                </button>
+                <button className={`px-4 py-2 text-left hover:bg-gray-100 ${logoutLoading ? 'enhanced-button-loading' : ''}`} onClick={handleLogout} disabled={logoutLoading}>
+                  {logoutLoading ? (
+                    <>
+                      <span className="enhanced-button-spinner w-3 h-3"></span>
+                      Logging out...
+                    </>
+                  ) : (
+                    <>
+                      Logout <span className="ml-1">→</span>
+                    </>
+                  )}
+                </button>
+              </div>
+            )}
+          </div>
+        </header>
 
-      <main className="flex-1 flex flex-col items-center justify-start">
-        <div className="bg-white bg-opacity-60 rounded-xl sm:rounded-2xl shadow-xl w-full sm:w-[95vw] h-[calc(100vh-120px)] sm:h-[calc(100vh-115px)] max-w-full sm:max-w-[800px] max-h-full sm:max-h-[900px] flex flex-col justify-start items-center p-2 sm:p-8 mt-0 mx-2 sm:mx-0 overflow-y-auto">
+        <main className="flex-1 flex flex-col items-center justify-start px-4 sm:px-6">
+          <div className="bg-white bg-opacity-60 rounded-xl sm:rounded-2xl shadow-xl w-full h-[calc(100vh-120px)] sm:h-[calc(100vh-115px)] max-h-full sm:max-h-[900px] flex flex-col justify-start items-center p-2 sm:p-8 mt-0 overflow-y-auto">
           
           {/* Profile Content */}
           <div className="w-full max-w-2xl space-y-6 pb-8">
@@ -366,7 +395,7 @@ export default function ProfilePage({ user, onBack, onLogout, onUserUpdate }) {
                     title="Edit profile picture"
                   >
                     {uploadingImage ? (
-                      <span className="loading loading-spinner loading-xs"></span>
+                      <span className="enhanced-button-spinner w-3 h-3"></span>
                     ) : (
                       <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
                         <path strokeLinecap="round" strokeLinejoin="round" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
@@ -384,7 +413,7 @@ export default function ProfilePage({ user, onBack, onLogout, onUserUpdate }) {
                     title="Remove profile picture"
                   >
                     {uploadingImage ? (
-                      <span className="loading loading-spinner loading-xs"></span>
+                      <span className="enhanced-button-spinner w-2 h-2"></span>
                     ) : (
                       <svg className="w-3 h-3" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
                         <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
@@ -538,6 +567,7 @@ export default function ProfilePage({ user, onBack, onLogout, onUserUpdate }) {
           </div>
         </div>
       </main>
+      </div>
 
       {/* Change Password Modal */}
       {changePasswordModal && (

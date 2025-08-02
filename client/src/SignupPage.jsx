@@ -9,16 +9,19 @@ export default function SignupPage({ onBack, onLogin }) {
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
   const [success, setSuccess] = useState("");
+  const [loading, setLoading] = useState(false);
 
   const handleSubmit = async (e) => {
     e.preventDefault();
     setError("");
     setSuccess("");
+    setLoading(true);
 
     // Validate password
     const validation = validatePassword(password);
     if (!validation.valid) {
       setError(validation.message);
+      setLoading(false);
       return;
     }
 
@@ -41,6 +44,8 @@ export default function SignupPage({ onBack, onLogin }) {
       }, 1000);
     } catch (err) {
       setError(err.message);
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -70,16 +75,25 @@ export default function SignupPage({ onBack, onLogin }) {
               <button className="underline text-sm" onClick={onLogin}>log in instead</button>
             </div>
             <form className="flex flex-col gap-4" onSubmit={handleSubmit}>
-              <input type="text" placeholder="First name" className="input input-bordered w-full" value={firstName} onChange={e => setFirstName(e.target.value)} />
-              <input type="text" placeholder="Last name" className="input input-bordered w-full" value={lastName} onChange={e => setLastName(e.target.value)} />
-              <input type="email" placeholder="Email" className="input input-bordered w-full" value={email} onChange={e => setEmail(e.target.value)} />
+              <input type="text" placeholder="First name" className="input input-bordered w-full input-enhanced enhanced-focus" value={firstName} onChange={e => setFirstName(e.target.value)} />
+              <input type="text" placeholder="Last name" className="input input-bordered w-full input-enhanced enhanced-focus" value={lastName} onChange={e => setLastName(e.target.value)} />
+              <input type="email" placeholder="Email" className="input input-bordered w-full input-enhanced enhanced-focus" value={email} onChange={e => setEmail(e.target.value)} />
               <div>
-                <input type="password" placeholder="Password" className="input input-bordered w-full" value={password} onChange={e => setPassword(e.target.value)} />
+                <input type="password" placeholder="Password" className="input input-bordered w-full input-enhanced enhanced-focus" value={password} onChange={e => setPassword(e.target.value)} />
                 <div className="text-xs text-gray-500 mt-1">
                   Must be at least 8 characters with 1 uppercase letter and 1 special character
                 </div>
               </div>
-              <button type="submit" className="btn btn-primary w-full text-base sm:text-lg mt-2">Create account</button>
+              <button type="submit" className={`btn btn-primary w-full text-base sm:text-lg mt-2 button-press ${loading ? 'enhanced-button-loading' : ''}`} disabled={loading}>
+                {loading ? (
+                  <>
+                    <span className="enhanced-button-spinner w-4 h-4"></span>
+                    Creating account...
+                  </>
+                ) : (
+                  "Create account"
+                )}
+              </button>
               {error && <div className="text-red-500 text-sm mt-2">{error}</div>}
               {success && <div className="text-green-600 text-sm mt-2">{success}</div>}
             </form>
