@@ -6,7 +6,6 @@ export default function LandingPage({ onSignup, onLogin, onPublic }) {
                 <div className="navbar bg-transparent px-4 sm:px-8 pt-6 flex justify-between">
                     <a className="text-3xl font-bold text-primary">LinkBoard</a>
                     <div className="flex gap-2">
-                        <button className="btn btn-ghost" onClick={onPublic}>Public Boards</button>
                         <button className="btn btn-ghost" onClick={onLogin}>Login</button>
                         <button className="btn btn-primary" onClick={onSignup}>Sign Up</button>
                     </div>
