@@ -27,10 +27,9 @@ export default function DashboardPage({ onLogout, user: initialUser, onProfile }
   const colCount = Math.min(boards.length, maxCols) || 1;
   const breakpointColumnsObj = {
     default: colCount,
-    1280: Math.min(boards.length, 4) || 1,
-    1024: Math.min(boards.length, 3) || 1,
-    768: Math.min(boards.length, 2) || 1,
-    500: 1
+    1400: Math.min(boards.length, 3) || 1,
+    1100: Math.min(boards.length, 2) || 1,
+    768: 1
   };
 
   // Fetch user profile and boards
@@ -378,12 +377,12 @@ export default function DashboardPage({ onLogout, user: initialUser, onProfile }
         {user && user.showProfile ? (
           <ProfilePage user={user} onBack={() => setUser(u => ({ ...u, showProfile: false }))} onUserUpdate={setUser} />
         ) : (
-        <main className="flex-1 flex flex-col items-center justify-start px-4 sm:px-6">
-          <div className="bg-white bg-opacity-60 rounded-xl sm:rounded-2xl shadow-xl w-full h-[calc(100vh-120px)] sm:h-[calc(100vh-115px)] max-h-full sm:max-h-[900px] flex flex-col justify-center items-center p-2 sm:p-8 mt-0 overflow-hidden">
+        <main className="flex-1 flex flex-col items-center justify-start px-2 sm:px-6">
+          <div className="bg-white bg-opacity-60 rounded-xl sm:rounded-2xl shadow-xl w-full h-[calc(100vh-120px)] sm:h-[calc(100vh-115px)] max-h-full sm:max-h-[900px] flex flex-col justify-start items-center p-1 sm:p-8 pt-4 overflow-y-auto">
           {/* Boards List */}
                       <Masonry
               breakpointCols={breakpointColumnsObj}
-              className="my-masonry-grid w-full mb-4 max-h-[80vh] overflow-y-auto overflow-x-hidden"
+              className="my-masonry-grid w-full mb-4 overflow-y-auto overflow-x-hidden"
               columnClassName="my-masonry-grid_column"
             >
             {boards.map((board, idx) => (

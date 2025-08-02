@@ -13,7 +13,7 @@ export default function LandingPage({ onSignup, onLogin }) {
 
                 {/* Main Content */}
                 <div className="flex flex-col lg:flex-row items-center lg:items-center justify-around px-4 sm:px-8 lg:px-24 mt-12
-                gap-2">
+                gap-10">
                     {/* Left Section */}
                     <div className="w-full max-w-xl flex flex-col items-center lg:items-start text-center lg:text-left">
                         <h1 className="text-5xl md:text-6xl font-black leading-tight mb-4">
