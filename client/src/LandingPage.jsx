@@ -65,7 +65,6 @@ export default function LandingPage({ onSignup, onLogin, onPublic }) {
                             <div className="flex flex-col gap-3 mb-4">
                                 <div className="btn bg-neutral text-white font-bold flex flex-col items-start h-auto py-2 px-4 text-left">
                                     <span>Figma Todo List Template</span>
-                                    <span className="text-xs font-normal text-gray-200">www.figma.com/community/fi...</span>
                                 </div>
                             </div>
                             <div className="flex justify-center">
