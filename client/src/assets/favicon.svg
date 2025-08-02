@@ -1,0 +1,14 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32" fill="none">
+  <!-- Background circle -->
+  <circle cx="16" cy="16" r="15" fill="#3B82F6" stroke="#1E40AF" stroke-width="2"/>
+  
+  <!-- Link chain -->
+  <path d="M12 16a4 4 0 0 0 6 0l2-2a4 4 0 0 0-5.66-5.66l-1.34 1.34" stroke="white" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+  <path d="M20 16a4 4 0 0 0-6 0l-2 2a4 4 0 0 0 5.66 5.66l1.34-1.34" stroke="white" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+  
+  <!-- Board corners -->
+  <circle cx="8" cy="8" r="1.5" fill="white"/>
+  <circle cx="24" cy="8" r="1.5" fill="white"/>
+  <circle cx="8" cy="24" r="1.5" fill="white"/>
+  <circle cx="24" cy="24" r="1.5" fill="white"/>
+</svg> 

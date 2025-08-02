@@ -70,7 +70,7 @@ export default function ProfilePage({ user, onBack, onLogout, onUserUpdate }) {
 
   const handleSaveProfile = async () => {
     if (!firstName.trim() || !lastName.trim()) {
-      alert('Please enter both first name and last name');
+      window.showToast('Please enter both first name and last name', 'error');
       return;
     }
 
@@ -84,12 +84,12 @@ export default function ProfilePage({ user, onBack, onLogout, onUserUpdate }) {
         if (refreshResult.success) {
           setUserProfile(refreshResult.data);
         }
-        alert('Profile updated successfully!');
+        window.showToast('Profile updated successfully!', 'success');
       } else {
-        alert('Failed to update profile: ' + result.message);
+        window.showToast('Failed to update profile: ' + result.message, 'error');
       }
     } catch (error) {
-      alert('Error updating profile: ' + error.message);
+      window.showToast('Error updating profile: ' + error.message, 'error');
     } finally {
       setIsUpdating(false);
     }
@@ -108,13 +108,13 @@ export default function ProfilePage({ user, onBack, onLogout, onUserUpdate }) {
 
     // Validate file type
     if (!file.type.startsWith('image/')) {
-      alert('Please select an image file');
+      window.showToast('Please select an image file', 'error');
       return;
     }
 
     // Validate file size (max 5MB)
     if (file.size > 5 * 1024 * 1024) {
-      alert('Image size must be less than 5MB');
+      window.showToast('Image size must be less than 5MB', 'error');
       return;
     }
 
@@ -130,12 +130,12 @@ export default function ProfilePage({ user, onBack, onLogout, onUserUpdate }) {
         await new Promise(resolve => setTimeout(resolve, 100));
         // Update the user state in the parent component
         if (onUserUpdate) onUserUpdate(auth.currentUser);
-        alert('Profile image updated successfully!');
+        window.showToast('Profile image updated successfully!', 'success');
       } else {
-        alert('Failed to upload image: ' + result.message);
+        window.showToast('Failed to upload image: ' + result.message, 'error');
       }
     } catch (error) {
-      alert('Error uploading image: ' + error.message);
+      window.showToast('Error uploading image: ' + error.message, 'error');
     } finally {
       setUploadingImage(false);
     }
@@ -163,13 +163,13 @@ export default function ProfilePage({ user, onBack, onLogout, onUserUpdate }) {
           console.log('Calling onUserUpdate with:', auth.currentUser);
           onUserUpdate(auth.currentUser);
         }
-        alert('Profile image deleted successfully!');
+        window.showToast('Profile image deleted successfully!', 'success');
       } else {
-        alert('Failed to delete image: ' + result.message);
+        window.showToast('Failed to delete image: ' + result.message, 'error');
       }
     } catch (error) {
       console.error('Error in handleDeleteImage:', error);
-      alert('Error deleting image: ' + error.message);
+      window.showToast('Error deleting image: ' + error.message, 'error');
     } finally {
       setUploadingImage(false);
     }
@@ -227,7 +227,7 @@ export default function ProfilePage({ user, onBack, onLogout, onUserUpdate }) {
     try {
       const result = await changeUserPassword(currentPassword, newPassword);
       if (result.success) {
-        alert('Password changed successfully! You will be logged out to log in with your new password.');
+        window.showToast('Password changed successfully! You will be logged out to log in with your new password.', 'success');
         handleCancelChangePassword();
         // Log out the user after successful password change
         if (onLogout) {
@@ -279,7 +279,7 @@ export default function ProfilePage({ user, onBack, onLogout, onUserUpdate }) {
     try {
       const result = await deleteUserAccount(deletePassword);
       if (result.success) {
-        alert('Account deleted successfully!');
+        window.showToast('Account deleted successfully!', 'success');
         // Log out the user after successful account deletion
         if (onLogout) {
           onLogout();
