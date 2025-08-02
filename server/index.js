@@ -24,6 +24,7 @@ const BoardSchema = new mongoose.Schema({
   links: [LinkSchema],
   userId: String, // Add user ID field
   userEmail: String, // Add user email for reference
+  isPublic: { type: Boolean, default: false }, // Add public/private toggle
 });
 
 // User Profile Schema
@@ -54,6 +55,19 @@ app.get('/api/boards', async (req, res) => {
   } catch (error) {
     console.error('Error fetching boards:', error);
     res.status(500).json({ error: 'Failed to fetch boards' });
+  }
+});
+
+// Get public boards (no authentication required)
+app.get('/api/boards/public', async (req, res) => {
+  try {
+    const publicBoards = await Board.find({ 
+      isPublic: true 
+    }).populate('userId', 'userEmail');
+    res.json(publicBoards);
+  } catch (error) {
+    console.error('Error fetching public boards:', error);
+    res.status(500).json({ error: 'Failed to fetch public boards' });
   }
 });
 

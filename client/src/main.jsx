@@ -7,6 +7,7 @@ import SignupPage from './SignupPage.jsx';
 import LoginPage from './LoginPage.jsx';
 import DashboardPage from './DashboardPage.jsx';
 import ProfilePage from './ProfilePage.jsx';
+import PublicBoardPage from './PublicBoardPage.jsx';
 import LoadingSpinner from './components/LoadingSpinner.jsx';
 import { auth } from './firebase';
 import { onAuthStateChanged } from 'firebase/auth';
@@ -46,6 +47,7 @@ function App() {
       user={user} 
       onLogout={handleLogout}
       onProfile={() => setPage('profile')}
+      onPublic={() => setPage('public')}
     />;
   }
   if (page === 'profile' && user) {
@@ -60,13 +62,21 @@ function App() {
       }}
     />;
   }
+  if (page === 'public') {
+    return <PublicBoardPage 
+      onLogin={() => setPage('login')} 
+      onSignup={() => setPage('signup')} 
+      onBackToDashboard={() => setPage('dashboard')}
+      isLoggedIn={!!user}
+    />;
+  }
   if (page === 'signup') {
     return <SignupPage onBack={() => setPage('landing')} onLogin={() => setPage('login')} />;
   }
   if (page === 'login') {
     return <LoginPage onBack={() => setPage('landing')} onSignup={() => setPage('signup')} onLogin={user => { setUser(user); setPage('dashboard'); }} />;
   }
-  return <LandingPage onSignup={() => setPage('signup')} onLogin={() => setPage('login')} />;
+  return <LandingPage onSignup={() => setPage('signup')} onLogin={() => setPage('login')} onPublic={() => setPage('public')} />;
 }
 
 export default App;

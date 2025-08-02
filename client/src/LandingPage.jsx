@@ -1,4 +1,4 @@
-export default function LandingPage({ onSignup, onLogin }) {
+export default function LandingPage({ onSignup, onLogin, onPublic }) {
     return (
         <div className="min-h-screen bg-gradient-to-br from-[#ffff] to-[#6ba3ec]">
             <div className="w-full max-w-[1600px] mx-auto">
@@ -6,6 +6,7 @@ export default function LandingPage({ onSignup, onLogin }) {
                 <div className="navbar bg-transparent px-4 sm:px-8 pt-6 flex justify-between">
                     <a className="text-3xl font-bold text-primary">LinkBoard</a>
                     <div className="flex gap-2">
+                        <button className="btn btn-ghost" onClick={onPublic}>Public Boards</button>
                         <button className="btn btn-ghost" onClick={onLogin}>Login</button>
                         <button className="btn btn-primary" onClick={onSignup}>Sign Up</button>
                     </div>
@@ -29,7 +30,7 @@ export default function LandingPage({ onSignup, onLogin }) {
                         </p>
                         <div className="flex gap-4">
                             <button className="btn btn-primary text-lg px-8" onClick={onSignup}>Get Started</button>
-                            <button className="btn btn-ghost text-lg flex items-center gap-2">
+                            <button className="btn btn-ghost text-lg flex items-center gap-2" onClick={onPublic}>
                                 <svg width="24" height="24" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><polygon points="10,8 16,12 10,16"/></svg>
                                 View Public Boards
                             </button>
