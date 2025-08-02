@@ -4,7 +4,7 @@ import Masonry from "react-masonry-css";
 import LoadingSpinner from "./components/LoadingSpinner.jsx";
 import { getUserProfileFromFirestore } from "./firebase";
 
-export default function DashboardPage({ onLogout, user: initialUser, onProfile }) {
+export default function DashboardPage({ onLogout, user: initialUser, onProfile, onPublic }) {
   const [user, setUser] = useState(initialUser);
   const [userProfile, setUserProfile] = useState(null);
   const [menuOpen, setMenuOpen] = useState(false);
@@ -63,7 +63,7 @@ export default function DashboardPage({ onLogout, user: initialUser, onProfile }
   const fetchBoards = async () => {
     try {
       console.log('Fetching boards for user:', user.uid);
-      const response = await fetch(`http://localhost:3001/api/boards?userId=${user.uid}`);
+      const response = await fetch(`${import.meta.env.VITE_API_URL || 'http://localhost:3001'}/api/boards?userId=${user.uid}`);
       console.log('Fetch boards response status:', response.status);
       
       if (!response.ok) {
@@ -130,7 +130,7 @@ export default function DashboardPage({ onLogout, user: initialUser, onProfile }
     // Update order in backend
     try {
       const updatePromises = newBoards.map((board, index) => 
-        fetch(`http://localhost:3001/api/boards/${board._id}`, {
+        fetch(`${import.meta.env.VITE_API_URL || 'http://localhost:3001'}/api/boards/${board._id}`, {
           method: 'PUT',
           headers: {
             'Content-Type': 'application/json',
@@ -148,7 +148,7 @@ export default function DashboardPage({ onLogout, user: initialUser, onProfile }
   const handleDeleteBoard = async (idx) => {
     try {
       const boardToDelete = boards[idx];
-      await fetch(`http://localhost:3001/api/boards/${boardToDelete._id}`, {
+      await fetch(`${import.meta.env.VITE_API_URL || 'http://localhost:3001'}/api/boards/${boardToDelete._id}`, {
         method: 'DELETE'
       });
       setBoards(boards => boards.filter((_, i) => i !== idx));
@@ -183,7 +183,7 @@ export default function DashboardPage({ onLogout, user: initialUser, onProfile }
       const updateData = { ...boardToUpdate, links: updatedLinks };
       console.log('Sending board update data:', updateData);
       
-      const response = await fetch(`http://localhost:3001/api/boards/${boardToUpdate._id}`, {
+      const response = await fetch(`${import.meta.env.VITE_API_URL || 'http://localhost:3001'}/api/boards/${boardToUpdate._id}`, {
         method: 'PUT',
         headers: {
           'Content-Type': 'application/json',
@@ -221,7 +221,7 @@ export default function DashboardPage({ onLogout, user: initialUser, onProfile }
       const boardToUpdate = boards[boardIdx];
       const updatedLinks = boardToUpdate.links.filter((_, lIdx) => lIdx !== linkIdx);
       
-      const response = await fetch(`http://localhost:3001/api/boards/${boardToUpdate._id}`, {
+      const response = await fetch(`${import.meta.env.VITE_API_URL || 'http://localhost:3001'}/api/boards/${boardToUpdate._id}`, {
         method: 'PUT',
         headers: {
           'Content-Type': 'application/json',
@@ -247,7 +247,7 @@ export default function DashboardPage({ onLogout, user: initialUser, onProfile }
     try {
       const boardToUpdate = boards[boardIdx];
       
-      const response = await fetch(`http://localhost:3001/api/boards/${boardToUpdate._id}`, {
+      const response = await fetch(`${import.meta.env.VITE_API_URL || 'http://localhost:3001'}/api/boards/${boardToUpdate._id}`, {
         method: 'PUT',
         headers: {
           'Content-Type': 'application/json',
@@ -263,6 +263,34 @@ export default function DashboardPage({ onLogout, user: initialUser, onProfile }
       }
     } catch (error) {
       console.error('Error reordering links:', error);
+    }
+  };
+
+  // Toggle public/private handler
+  const handleTogglePublic = async (boardIdx) => {
+    try {
+      const boardToUpdate = boards[boardIdx];
+      const newIsPublic = !boardToUpdate.isPublic;
+      
+      const response = await fetch(`${import.meta.env.VITE_API_URL || 'http://localhost:3001'}/api/boards/${boardToUpdate._id}`, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ ...boardToUpdate, isPublic: newIsPublic })
+      });
+
+      if (response.ok) {
+        const updatedBoard = await response.json();
+        setBoards(boards => boards.map((board, i) => 
+          i === boardIdx ? updatedBoard : board
+        ));
+      } else {
+        const errorText = await response.text();
+        console.error('Toggle error response:', errorText);
+      }
+    } catch (error) {
+      console.error('Error toggling public/private:', error);
     }
   };
 
@@ -291,7 +319,7 @@ export default function DashboardPage({ onLogout, user: initialUser, onProfile }
       };
       console.log('Sending board data:', boardData);
       
-      const response = await fetch('http://localhost:3001/api/boards', {
+      const response = await fetch(`${import.meta.env.VITE_API_URL || 'http://localhost:3001'}/api/boards`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -327,6 +355,10 @@ export default function DashboardPage({ onLogout, user: initialUser, onProfile }
           <h1 className="text-2xl sm:text-3xl font-bold text-primary">LinkBoard</h1>
           {/* Desktop menu */}
           <div className="hidden sm:flex gap-4 items-center">
+            <button className="btn btn-sm btn-ghost" onClick={onPublic}>
+              <svg className="inline-block w-5 h-5 mr-1" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><path d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6" /></svg>
+              Public Boards
+            </button>
             <button className="btn btn-sm btn-ghost" onClick={onProfile}>
               <svg className="inline-block w-5 h-5 mr-1" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><path d="M5.121 17.804A13.937 13.937 0 0112 15c2.5 0 4.847.655 6.879 1.804M15 11a3 3 0 11-6 0 3 3 0 016 0z" /></svg>
               Hi, {getUserFirstName()}
@@ -403,6 +435,9 @@ export default function DashboardPage({ onLogout, user: initialUser, onProfile }
                   onReorderLinks={(newLinks) => handleReorderLinks(idx, newLinks)}
                   isAddingLink={addingLinkLoading && addLinkModal.boardIdx === idx}
                   isDeletingLink={deletingLinkLoading}
+                  isPublic={board.isPublic || false}
+                  onTogglePublic={() => handleTogglePublic(idx)}
+                  isReadOnly={false}
                 />
               </div>
             ))}
