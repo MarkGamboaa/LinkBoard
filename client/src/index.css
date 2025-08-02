@@ -538,3 +538,53 @@ html {
     transition-duration: 0.01ms !important;
   }
 }
+
+/* Center cards on mobile only (single column) */
+@media (max-width: 767px) {
+  .my-masonry-grid {
+    margin-left: 0;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 16px; /* Add gap between cards */
+    padding: 0; /* Remove all padding to prevent cut-off */
+  }
+  
+  .my-masonry-grid_column {
+    padding-left: 0;
+    width: 100%;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+  }
+  
+  .my-masonry-grid_column > div {
+    width: 320px; /* Fixed width for mobile cards */
+    max-width: 100%;
+    margin-bottom: 16px; /* Ensure proper spacing between cards */
+  }
+  
+  /* Make sure the first board title is visible */
+  .my-masonry-grid_column > div:first-child {
+    margin-top: 0; /* Remove top margin since container has padding */
+  }
+  
+  /* Ensure the container has proper padding */
+  .my-masonry-grid {
+    margin-top: 0; /* Remove top margin to the entire grid */
+  }
+  
+  /* Make account action buttons slightly bigger on mobile */
+  .btn {
+    min-height: 44px; /* Slightly increase minimum height */
+    font-size: 15px; /* Slightly increase font size */
+    padding: 10px 14px; /* Slightly increase padding */
+  }
+  
+  /* Specific styling for account action buttons on mobile */
+  .card .btn {
+    min-height: 48px; /* Slightly bigger for account action buttons */
+    font-size: 16px; /* Slightly larger font for account actions */
+    padding: 12px 16px; /* Slightly more padding for account action buttons */
+  }
+}

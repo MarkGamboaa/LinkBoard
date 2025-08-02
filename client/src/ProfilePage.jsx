@@ -357,26 +357,26 @@ export default function ProfilePage({ user, onBack, onLogout, onUserUpdate }) {
         </header>
 
         <main className="flex-1 flex flex-col items-center justify-start px-4 sm:px-6">
-          <div className="bg-white bg-opacity-60 rounded-xl sm:rounded-2xl shadow-xl w-full h-[calc(100vh-120px)] sm:h-[calc(100vh-115px)] max-h-full sm:max-h-[900px] flex flex-col justify-start items-center p-2 sm:p-8 mt-0 overflow-y-auto">
+          <div className="bg-white bg-opacity-60 rounded-xl sm:rounded-2xl shadow-xl w-full max-w-2xl h-[calc(100vh-120px)] sm:h-[calc(100vh-115px)] max-h-full sm:max-h-[900px] flex flex-col justify-start items-center p-2 sm:p-4 lg:p-8 mt-0 overflow-y-auto">
           
           {/* Profile Content */}
-          <div className="w-full max-w-2xl space-y-6 pb-8">
+          <div className="w-full max-w-2xl space-y-4 sm:space-y-6 pb-4 sm:pb-8">
             {/* Profile Header */}
-            <div className="text-center space-y-4">
+            <div className="text-center space-y-3 sm:space-y-4">
               <div className="relative inline-block group">
                 <div className="avatar">
-                  <div className="w-24 h-24 rounded-full">
+                  <div className="w-20 h-20 sm:w-24 sm:h-24 rounded-full">
                     {(() => {
                       console.log('Rendering profile image - localPhotoURL:', localPhotoURL, 'type:', typeof localPhotoURL);
                       return localPhotoURL ? (
                         <img 
                           src={localPhotoURL} 
                           alt="Profile" 
-                          className="w-24 h-24 rounded-full object-cover"
+                          className="w-20 h-20 sm:w-24 sm:h-24 rounded-full object-cover"
                         />
                       ) : (
-                        <div className="bg-primary text-primary-content rounded-full w-24 h-24 flex items-center justify-center">
-                          <span className="text-3xl">
+                        <div className="bg-primary text-primary-content rounded-full w-20 h-20 sm:w-24 sm:h-24 flex items-center justify-center">
+                          <span className="text-2xl sm:text-3xl">
                             {userProfile ? userProfile.firstName?.charAt(0)?.toUpperCase() : 
                              user?.displayName ? user.displayName.charAt(0).toUpperCase() : 'U'}
                           </span>
@@ -433,38 +433,38 @@ export default function ProfilePage({ user, onBack, onLogout, onUserUpdate }) {
               </div>
               
               <div>
-                <h2 className="text-2xl font-bold text-gray-800">
+                <h2 className="text-xl sm:text-2xl font-bold text-gray-800">
                   {userProfile ? `${userProfile.firstName} ${userProfile.lastName}` : user?.displayName || 'User'}
                 </h2>
-                <p className="text-gray-600">{user?.email}</p>
+                <p className="text-sm sm:text-base text-gray-600 break-all">{user?.email}</p>
               </div>
             </div>
 
             {/* Profile Information */}
-            <div className="space-y-4">
+            <div className="space-y-3 sm:space-y-4">
               <div className="card bg-white/80 backdrop-blur">
-                <div className="card-body">
-                  <h3 className="card-title text-lg font-semibold">Account Information</h3>
-                  <div className="space-y-3">
+                <div className="card-body p-4 sm:p-6">
+                  <h3 className="card-title text-base sm:text-lg font-semibold">Account Information</h3>
+                  <div className="space-y-2 sm:space-y-3">
                     {editMode ? (
                       <>
-                        <div className="flex justify-between items-center">
-                          <span className="font-medium text-gray-700">First Name:</span>
+                        <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-2">
+                          <span className="font-medium text-gray-700 text-sm sm:text-base">First Name:</span>
                           <input
                             type="text"
                             value={firstName}
                             onChange={(e) => setFirstName(e.target.value)}
-                            className="input input-bordered input-sm w-32"
+                            className="input input-bordered input-sm w-full sm:w-32"
                             placeholder="First Name"
                           />
                         </div>
-                        <div className="flex justify-between items-center">
-                          <span className="font-medium text-gray-700">Last Name:</span>
+                        <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-2">
+                          <span className="font-medium text-gray-700 text-sm sm:text-base">Last Name:</span>
                           <input
                             type="text"
                             value={lastName}
                             onChange={(e) => setLastName(e.target.value)}
-                            className="input input-bordered input-sm w-32"
+                            className="input input-bordered input-sm w-full sm:w-32"
                             placeholder="Last Name"
                           />
                         </div>
@@ -487,31 +487,31 @@ export default function ProfilePage({ user, onBack, onLogout, onUserUpdate }) {
                       </>
                     ) : (
                       <>
-                        <div className="flex justify-between items-center">
-                          <span className="font-medium text-gray-700">First Name:</span>
-                          <span className="text-gray-900">{userProfile?.firstName || user?.displayName?.split(' ')[0] || 'Not set'}</span>
+                        <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-1">
+                          <span className="font-medium text-gray-700 text-sm sm:text-base">First Name:</span>
+                          <span className="text-gray-900 text-sm sm:text-base break-all">{userProfile?.firstName || user?.displayName?.split(' ')[0] || 'Not set'}</span>
                         </div>
-                        <div className="flex justify-between items-center">
-                          <span className="font-medium text-gray-700">Last Name:</span>
-                          <span className="text-gray-900">{userProfile?.lastName || user?.displayName?.split(' ').slice(1).join(' ') || 'Not set'}</span>
+                        <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-1">
+                          <span className="font-medium text-gray-700 text-sm sm:text-base">Last Name:</span>
+                          <span className="text-gray-900 text-sm sm:text-base break-all">{userProfile?.lastName || user?.displayName?.split(' ').slice(1).join(' ') || 'Not set'}</span>
                         </div>
                       </>
                     )}
-                    <div className="flex justify-between items-center">
-                      <span className="font-medium text-gray-700">Email:</span>
-                      <span className="text-gray-900">{user?.email}</span>
+                    <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-1">
+                      <span className="font-medium text-gray-700 text-sm sm:text-base">Email:</span>
+                      <span className="text-gray-900 text-sm sm:text-base break-all">{user?.email}</span>
                     </div>
-                    <div className="flex justify-between items-center">
-                      <span className="font-medium text-gray-700">Account Created:</span>
-                      <span className="text-gray-900">
+                    <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-1">
+                      <span className="font-medium text-gray-700 text-sm sm:text-base">Account Created:</span>
+                      <span className="text-gray-900 text-sm sm:text-base">
                         {user?.metadata?.creationTime ? 
                           new Date(user.metadata.creationTime).toLocaleDateString() : 
                           'Unknown'}
                       </span>
                     </div>
-                    <div className="flex justify-between items-center">
-                      <span className="font-medium text-gray-700">Last Sign In:</span>
-                      <span className="text-gray-900">
+                    <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-1">
+                      <span className="font-medium text-gray-700 text-sm sm:text-base">Last Sign In:</span>
+                      <span className="text-gray-900 text-sm sm:text-base">
                         {user?.metadata?.lastSignInTime ? 
                           new Date(user.metadata.lastSignInTime).toLocaleDateString() : 
                           'Unknown'}
@@ -523,24 +523,24 @@ export default function ProfilePage({ user, onBack, onLogout, onUserUpdate }) {
 
               {/* Account Actions */}
               <div className="card bg-white/80 backdrop-blur">
-                <div className="p-3 space-y-2">
-                  <h3 className="card-title text-lg font-semibold">Account Actions</h3>
-                  <div className="flex gap-2">
+                <div className="p-3 sm:p-4 space-y-2">
+                  <h3 className="card-title text-base sm:text-lg font-semibold">Account Actions</h3>
+                  <div className="flex flex-col sm:flex-row gap-2">
                     <button 
-                      className="btn btn-outline btn-primary flex-1" 
+                      className="btn btn-outline btn-primary flex-1 text-sm sm:text-base" 
                       onClick={handleEditProfile}
                       disabled={editMode}
                     >
-                      <svg className="w-5 h-5 mr-2" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
+                      <svg className="w-4 h-4 sm:w-5 sm:h-5 mr-1 sm:mr-2" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
                         <path strokeLinecap="round" strokeLinejoin="round" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
                       </svg>
                       Edit Profile
                     </button>
                     <button 
-                      className="btn btn-outline btn-secondary flex-1" 
+                      className="btn btn-outline btn-secondary flex-1 text-sm sm:text-base" 
                       onClick={handleChangePassword}
                     >
-                      <svg className="w-5 h-5 mr-2" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
+                      <svg className="w-4 h-4 sm:w-5 sm:h-5 mr-1 sm:mr-2" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
                         <path strokeLinecap="round" strokeLinejoin="round" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
                       </svg>
                       Change Password
@@ -551,12 +551,12 @@ export default function ProfilePage({ user, onBack, onLogout, onUserUpdate }) {
 
               {/* Delete Account */}
               <div className="card bg-white/80 backdrop-blur">
-                <div className="p-3">
+                <div className="p-3 sm:p-4">
                   <button 
-                    className="btn btn-error w-full" 
+                    className="btn btn-error w-full text-sm sm:text-base" 
                     onClick={handleDeleteAccount}
                   >
-                    <svg className="w-5 h-5 mr-2" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
+                    <svg className="w-4 h-4 sm:w-5 sm:h-5 mr-1 sm:mr-2" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
                       <path strokeLinecap="round" strokeLinejoin="round" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
                     </svg>
                     Delete Account
@@ -571,8 +571,8 @@ export default function ProfilePage({ user, onBack, onLogout, onUserUpdate }) {
 
       {/* Change Password Modal */}
       {changePasswordModal && (
-        <div className="fixed inset-0 flex items-center justify-center bg-black/20 backdrop-blur-sm z-50">
-          <div className="bg-white rounded-lg p-6 shadow-lg flex flex-col gap-4 min-w-[400px]">
+        <div className="fixed inset-0 flex items-center justify-center bg-black/20 backdrop-blur-sm z-50 p-4">
+          <div className="bg-white rounded-lg p-4 sm:p-6 shadow-lg flex flex-col gap-4 w-full max-w-md">
             <h2 className="text-lg font-bold">Change Password</h2>
             
             {passwordError && (
@@ -587,26 +587,26 @@ export default function ProfilePage({ user, onBack, onLogout, onUserUpdate }) {
             <div className="space-y-3">
               <div>
                 <label className="label">
-                  <span className="label-text">Current Password</span>
+                  <span className="label-text text-sm sm:text-base">Current Password</span>
                 </label>
                 <input
                   type="password"
                   value={currentPassword}
                   onChange={(e) => setCurrentPassword(e.target.value)}
-                  className="input input-bordered w-full"
+                  className="input input-bordered w-full text-sm sm:text-base"
                   placeholder="Enter current password"
                 />
               </div>
               
               <div>
                 <label className="label">
-                  <span className="label-text">New Password</span>
+                  <span className="label-text text-sm sm:text-base">New Password</span>
                 </label>
                 <input
                   type="password"
                   value={newPassword}
                   onChange={(e) => setNewPassword(e.target.value)}
-                  className="input input-bordered w-full"
+                  className="input input-bordered w-full text-sm sm:text-base"
                   placeholder="Enter new password"
                 />
                 <div className="text-xs text-gray-500 mt-1">
@@ -616,28 +616,28 @@ export default function ProfilePage({ user, onBack, onLogout, onUserUpdate }) {
               
               <div>
                 <label className="label">
-                  <span className="label-text">Confirm New Password</span>
+                  <span className="label-text text-sm sm:text-base">Confirm New Password</span>
                 </label>
                 <input
                   type="password"
                   value={confirmPassword}
                   onChange={(e) => setConfirmPassword(e.target.value)}
-                  className="input input-bordered w-full"
+                  className="input input-bordered w-full text-sm sm:text-base"
                   placeholder="Confirm new password"
                 />
               </div>
             </div>
 
-            <div className="flex gap-2 justify-end">
+            <div className="flex flex-col sm:flex-row gap-2 justify-end">
               <button 
-                className="btn btn-ghost" 
+                className="btn btn-ghost text-sm sm:text-base" 
                 onClick={handleCancelChangePassword}
                 disabled={changingPassword}
               >
                 Cancel
               </button>
               <button
-                className="btn btn-primary"
+                className="btn btn-primary text-sm sm:text-base"
                 onClick={handleSubmitChangePassword}
                 disabled={changingPassword}
               >
@@ -650,8 +650,8 @@ export default function ProfilePage({ user, onBack, onLogout, onUserUpdate }) {
 
       {/* Delete Account Modal */}
       {deleteAccountModal && (
-        <div className="fixed inset-0 flex items-center justify-center bg-black/20 backdrop-blur-sm z-50">
-          <div className="bg-white rounded-lg p-6 shadow-lg flex flex-col gap-4 min-w-[400px]">
+        <div className="fixed inset-0 flex items-center justify-center bg-black/20 backdrop-blur-sm z-50 p-4">
+          <div className="bg-white rounded-lg p-4 sm:p-6 shadow-lg flex flex-col gap-4 w-full max-w-md">
             <h2 className="text-lg font-bold text-red-600">Delete Account</h2>
             
             <div className="alert alert-warning text-sm">
@@ -672,27 +672,27 @@ export default function ProfilePage({ user, onBack, onLogout, onUserUpdate }) {
 
             <div>
               <label className="label">
-                <span className="label-text">Enter your password to confirm</span>
+                <span className="label-text text-sm sm:text-base">Enter your password to confirm</span>
               </label>
               <input
                 type="password"
                 value={deletePassword}
                 onChange={(e) => setDeletePassword(e.target.value)}
-                className="input input-bordered w-full"
+                className="input input-bordered w-full text-sm sm:text-base"
                 placeholder="Enter your password"
               />
             </div>
 
-            <div className="flex gap-2 justify-end">
+            <div className="flex flex-col sm:flex-row gap-2 justify-end">
               <button 
-                className="btn btn-ghost" 
+                className="btn btn-ghost text-sm sm:text-base" 
                 onClick={handleCancelDeleteAccount}
                 disabled={deletingAccount}
               >
                 Cancel
               </button>
               <button
-                className="btn btn-error"
+                className="btn btn-error text-sm sm:text-base"
                 onClick={handleConfirmDeleteAccount}
                 disabled={deletingAccount}
               >
