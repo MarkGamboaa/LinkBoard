@@ -2,6 +2,7 @@ import React, { useState, useEffect } from "react";
 import LinkCard from "./LinkCard";
 import Masonry from "react-masonry-css";
 import LoadingSpinner from "./components/LoadingSpinner.jsx";
+import ProfilePage from "./ProfilePage.jsx";
 import { getUserProfileFromFirestore } from "./firebase";
 
 export default function DashboardPage({ onLogout, user: initialUser, onProfile, onPublic }) {

@@ -80,7 +80,7 @@ export const updateUserProfile = async (firstName, lastName) => {
     }
 
     // Update profile in MongoDB
-    const response = await fetch('http://localhost:3001/api/profile', {
+    const response = await fetch(`${import.meta.env.VITE_API_URL || 'http://localhost:3001'}/api/profile`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -114,7 +114,7 @@ export const updateUserProfile = async (firstName, lastName) => {
 // Utility function to get user profile from MongoDB API
 export const getUserProfileFromFirestore = async (userId) => {
   try {
-    const response = await fetch(`http://localhost:3001/api/profile/${userId}`);
+    const response = await fetch(`${import.meta.env.VITE_API_URL || 'http://localhost:3001'}/api/profile/${userId}`);
     
     if (response.ok) {
       const profileData = await response.json();
@@ -202,7 +202,7 @@ export const deleteUserAccount = async (currentPassword) => {
     // Test if server is accessible
     console.log('Testing server connectivity...');
     try {
-      const testResponse = await fetch('http://localhost:3001/api/test');
+      const testResponse = await fetch(`${import.meta.env.VITE_API_URL || 'http://localhost:3001'}/api/test`);
       if (!testResponse.ok) {
         throw new Error('Server not accessible');
       }
@@ -214,7 +214,7 @@ export const deleteUserAccount = async (currentPassword) => {
 
     // Delete user data from MongoDB first
     console.log('Deleting user profile from MongoDB for user:', user.uid);
-    const deleteProfileResponse = await fetch(`http://localhost:3001/api/profile/${user.uid}`, {
+          const deleteProfileResponse = await fetch(`${import.meta.env.VITE_API_URL || 'http://localhost:3001'}/api/profile/${user.uid}`, {
       method: 'DELETE'
     });
 
@@ -228,7 +228,7 @@ export const deleteUserAccount = async (currentPassword) => {
 
     // Delete all user's boards from MongoDB
     console.log('Deleting user boards from MongoDB for user:', user.uid);
-    const deleteBoardsResponse = await fetch(`http://localhost:3001/api/boards?userId=${user.uid}`, {
+          const deleteBoardsResponse = await fetch(`${import.meta.env.VITE_API_URL || 'http://localhost:3001'}/api/boards?userId=${user.uid}`, {
       method: 'DELETE'
     });
 
