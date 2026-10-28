@@ -102,4 +102,10 @@ Desktop.ini
 
 # Temporary files
 *.tmp
-*.temp 
+*.temp
+# Firebase Admin credentials
+server/firebase-service-account*.json
+server/serviceAccountKey*.json
+
+# Generated Prisma Client
+server/generated/

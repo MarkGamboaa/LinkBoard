@@ -32,10 +32,10 @@ export default function SignupPage({ onBack, onLogin }) {
       // Save both first and last name in displayName
       await updateProfile(userCredential.user, { displayName: `${firstName} ${lastName}`.trim() });
       
-      // Save profile data to MongoDB
+      // Save profile data through the authenticated API
       const profileResult = await updateUserProfile(firstName.trim(), lastName.trim());
       if (!profileResult.success) {
-        console.error('Failed to save profile to MongoDB:', profileResult.message);
+        console.error('Failed to save profile:', profileResult.message);
       }
       
       setSuccess("Account created! Redirecting to login...");

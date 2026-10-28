@@ -1,0 +1,44 @@
+generator client {
+  provider = "prisma-client"
+  output   = "../generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+model Board {
+  id         String   @id @default(cuid())
+  ownerUid   String
+  ownerEmail String?
+  title      String
+  isPublic   Boolean  @default(false)
+  sortOrder  Int      @default(0)
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+  links      Link[]
+
+  @@index([ownerUid, sortOrder])
+  @@index([isPublic, createdAt])
+}
+
+model Link {
+  id       String  @id @default(cuid())
+  boardId  String
+  title    String
+  url      String
+  color    String?
+  position Int     @default(0)
+  board    Board   @relation(fields: [boardId], references: [id], onDelete: Cascade)
+
+  @@index([boardId, position])
+}
+
+model UserProfile {
+  firebaseUid String   @id
+  email       String?
+  firstName   String
+  lastName    String
+  displayName String
+  updatedAt   DateTime @updatedAt
+}

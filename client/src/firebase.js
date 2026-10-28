@@ -22,6 +22,22 @@ const firebaseConfig = {
 const app = initializeApp(firebaseConfig);
 export const auth = getAuth(app);
 
+// Attach the signed-in Firebase identity to API requests. The server verifies
+// this token and uses its UID instead of trusting a UID supplied in the body.
+export const apiFetch = async (endpoint, options = {}) => {
+  const user = auth.currentUser;
+  if (!user) throw new Error('You must be signed in to perform this action');
+
+  const idToken = await user.getIdToken();
+  return fetch(getApiUrl(endpoint), {
+    ...options,
+    headers: {
+      ...options.headers,
+      Authorization: `Bearer ${idToken}`,
+    },
+  });
+};
+
 // Utility function to upload profile image using Cloudinary
 export const uploadProfileImage = async (file) => {
   try {
@@ -72,7 +88,7 @@ export const deleteProfileImage = async () => {
   }
 };
 
-// Utility function to update user profile using MongoDB API
+// Utility function to update user profile through the authenticated API
 export const updateUserProfile = async (firstName, lastName) => {
   try {
     const user = auth.currentUser;
@@ -80,15 +96,13 @@ export const updateUserProfile = async (firstName, lastName) => {
       throw new Error('No user is currently signed in');
     }
 
-    // Update profile in MongoDB
-    const response = await fetch(getApiUrl('/api/profile'), {
+    // Save profile data in PostgreSQL through the authenticated API.
+    const response = await apiFetch('/api/profile', {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
       },
       body: JSON.stringify({
-        userId: user.uid,
-        email: user.email,
         firstName: firstName.trim(),
         lastName: lastName.trim()
       })
@@ -112,10 +126,10 @@ export const updateUserProfile = async (firstName, lastName) => {
   }
 };
 
-// Utility function to get user profile from MongoDB API
-export const getUserProfileFromFirestore = async (userId) => {
+// Utility function to get the signed-in user's profile from the API
+export const getUserProfile = async () => {
   try {
-    const response = await fetch(getApiUrl(`/api/profile/${userId}`));
+    const response = await apiFetch('/api/profile');
     
     if (response.ok) {
       const profileData = await response.json();
@@ -213,33 +227,33 @@ export const deleteUserAccount = async (currentPassword) => {
       throw new Error('Cannot connect to server. Please ensure the server is running.');
     }
 
-    // Delete user data from MongoDB first
-    console.log('Deleting user profile from MongoDB for user:', user.uid);
-          const deleteProfileResponse = await fetch(getApiUrl(`/api/profile/${user.uid}`), {
+    // Delete user data from PostgreSQL before deleting Firebase Auth account.
+    console.log('Deleting user profile for user:', user.uid);
+    const deleteProfileResponse = await apiFetch('/api/profile', {
       method: 'DELETE'
     });
 
     console.log('Profile deletion response status:', deleteProfileResponse.status);
     if (!deleteProfileResponse.ok && deleteProfileResponse.status !== 404) {
       const errorText = await deleteProfileResponse.text();
-      console.error('Failed to delete user profile from MongoDB:', errorText);
+      console.error('Failed to delete user profile:', errorText);
     } else {
-      console.log('User profile deleted successfully from MongoDB');
+      console.log('User profile deleted successfully');
     }
 
-    // Delete all user's boards from MongoDB
-    console.log('Deleting user boards from MongoDB for user:', user.uid);
-          const deleteBoardsResponse = await fetch(getApiUrl(`/api/boards?userId=${user.uid}`), {
+    // Delete all of the user's boards from PostgreSQL.
+    console.log('Deleting user boards for user:', user.uid);
+    const deleteBoardsResponse = await apiFetch('/api/boards', {
       method: 'DELETE'
     });
 
     console.log('Boards deletion response status:', deleteBoardsResponse.status);
     if (!deleteBoardsResponse.ok) {
       const errorText = await deleteBoardsResponse.text();
-      console.error('Failed to delete user boards from MongoDB:', errorText);
+      console.error('Failed to delete user boards:', errorText);
     } else {
       const result = await deleteBoardsResponse.json();
-      console.log('User boards deleted successfully from MongoDB:', result);
+      console.log('User boards deleted successfully:', result);
     }
 
     // Finally, delete the user from Firebase Auth

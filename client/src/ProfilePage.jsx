@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from "react";
-import { updateUserProfile, getUserProfileFromFirestore, uploadProfileImage, deleteProfileImage, changeUserPassword, validatePassword, deleteUserAccount } from "./firebase";
+import { updateUserProfile, getUserProfile, uploadProfileImage, deleteProfileImage, changeUserPassword, validatePassword, deleteUserAccount } from "./firebase";
 import LoadingSpinner from "./components/LoadingSpinner.jsx";
 
 import { auth } from "./firebase";
@@ -33,17 +33,17 @@ export default function ProfilePage({ user, onBack, onLogout, onUserUpdate }) {
     setLocalPhotoURL(user?.photoURL);
   }, [user]);
 
-  // Load user profile from Firestore
+  // Load the signed-in user's profile from the API.
   useEffect(() => {
     const loadUserProfile = async () => {
       try {
-        const result = await getUserProfileFromFirestore(user.uid);
+        const result = await getUserProfile();
         if (result.success) {
           setUserProfile(result.data);
           setFirstName(result.data.firstName || '');
           setLastName(result.data.lastName || '');
         } else {
-          // Fallback to Firebase Auth displayName if no MongoDB data
+          // Fall back to Firebase Auth displayName if no profile is saved.
           const displayNameParts = user?.displayName?.split(' ') || [];
           setFirstName(displayNameParts[0] || '');
           setLastName(displayNameParts.slice(1).join(' ') || '');
@@ -80,7 +80,7 @@ export default function ProfilePage({ user, onBack, onLogout, onUserUpdate }) {
       if (result.success) {
         setEditMode(false);
         // Refresh the profile data
-        const refreshResult = await getUserProfileFromFirestore(user.uid);
+        const refreshResult = await getUserProfile();
         if (refreshResult.success) {
           setUserProfile(refreshResult.data);
         }
@@ -704,4 +704,4 @@ export default function ProfilePage({ user, onBack, onLogout, onUserUpdate }) {
       )}
     </div>
   );
-} 
+}

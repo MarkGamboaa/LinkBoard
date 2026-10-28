@@ -3,8 +3,7 @@ import LinkCard from "./LinkCard";
 import Masonry from "react-masonry-css";
 import LoadingSpinner from "./components/LoadingSpinner.jsx";
 import ProfilePage from "./ProfilePage.jsx";
-import { getUserProfileFromFirestore } from "./firebase";
-import { getApiUrl } from "./utils/api";
+import { apiFetch, getUserProfile } from "./firebase";
 
 export default function DashboardPage({ onLogout, user: initialUser, onProfile, onPublic }) {
   const [user, setUser] = useState(initialUser);
@@ -42,7 +41,7 @@ export default function DashboardPage({ onLogout, user: initialUser, onProfile, 
 
   const fetchUserProfile = async () => {
     try {
-      const result = await getUserProfileFromFirestore(user.uid);
+      const result = await getUserProfile();
       if (result.success) {
         setUserProfile(result.data);
       }
@@ -65,7 +64,7 @@ export default function DashboardPage({ onLogout, user: initialUser, onProfile, 
   const fetchBoards = async () => {
     try {
       console.log('Fetching boards for user:', user.uid);
-      const response = await fetch(getApiUrl(`/api/boards?userId=${user.uid}`));
+      const response = await apiFetch('/api/boards');
       console.log('Fetch boards response status:', response.status);
       
       if (!response.ok) {
@@ -132,7 +131,7 @@ export default function DashboardPage({ onLogout, user: initialUser, onProfile, 
     // Update order in backend
     try {
       const updatePromises = newBoards.map((board, index) => 
-        fetch(getApiUrl(`/api/boards/${board._id}`), {
+        apiFetch(`/api/boards/${board._id}`, {
           method: 'PUT',
           headers: {
             'Content-Type': 'application/json',
@@ -150,7 +149,7 @@ export default function DashboardPage({ onLogout, user: initialUser, onProfile, 
   const handleDeleteBoard = async (idx) => {
     try {
       const boardToDelete = boards[idx];
-              await fetch(getApiUrl(`/api/boards/${boardToDelete._id}`), {
+              await apiFetch(`/api/boards/${boardToDelete._id}`, {
         method: 'DELETE'
       });
       setBoards(boards => boards.filter((_, i) => i !== idx));
@@ -185,7 +184,7 @@ export default function DashboardPage({ onLogout, user: initialUser, onProfile, 
       const updateData = { ...boardToUpdate, links: updatedLinks };
       console.log('Sending board update data:', updateData);
       
-      const response = await fetch(getApiUrl(`/api/boards/${boardToUpdate._id}`), {
+      const response = await apiFetch(`/api/boards/${boardToUpdate._id}`, {
         method: 'PUT',
         headers: {
           'Content-Type': 'application/json',
@@ -223,7 +222,7 @@ export default function DashboardPage({ onLogout, user: initialUser, onProfile, 
       const boardToUpdate = boards[boardIdx];
       const updatedLinks = boardToUpdate.links.filter((_, lIdx) => lIdx !== linkIdx);
       
-      const response = await fetch(getApiUrl(`/api/boards/${boardToUpdate._id}`), {
+      const response = await apiFetch(`/api/boards/${boardToUpdate._id}`, {
         method: 'PUT',
         headers: {
           'Content-Type': 'application/json',
@@ -249,7 +248,7 @@ export default function DashboardPage({ onLogout, user: initialUser, onProfile, 
     try {
       const boardToUpdate = boards[boardIdx];
       
-      const response = await fetch(getApiUrl(`/api/boards/${boardToUpdate._id}`), {
+      const response = await apiFetch(`/api/boards/${boardToUpdate._id}`, {
         method: 'PUT',
         headers: {
           'Content-Type': 'application/json',
@@ -274,7 +273,7 @@ export default function DashboardPage({ onLogout, user: initialUser, onProfile, 
       const boardToUpdate = boards[boardIdx];
       const newIsPublic = !boardToUpdate.isPublic;
       
-      const response = await fetch(getApiUrl(`/api/boards/${boardToUpdate._id}`), {
+      const response = await apiFetch(`/api/boards/${boardToUpdate._id}`, {
         method: 'PUT',
         headers: {
           'Content-Type': 'application/json',
@@ -316,12 +315,10 @@ export default function DashboardPage({ onLogout, user: initialUser, onProfile, 
       const boardData = { 
         title: newBoardTitle, 
         links: [],
-        userId: user.uid,
-        userEmail: user.email
       };
       console.log('Sending board data:', boardData);
       
-      const response = await fetch(getApiUrl('/api/boards'), {
+      const response = await apiFetch('/api/boards', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',

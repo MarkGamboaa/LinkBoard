@@ -1,278 +1,254 @@
-const express = require('express');
-const mongoose = require('mongoose');
-const cors = require('cors');
-require('dotenv').config();
+import 'dotenv/config';
+import Fastify from 'fastify';
+import cors from '@fastify/cors';
+import { applicationDefault, cert, getApps, initializeApp } from 'firebase-admin/app';
+import { getAuth } from 'firebase-admin/auth';
+import { PrismaPg } from '@prisma/adapter-pg';
+import { PrismaClient } from './generated/prisma/client.ts';
 
-const app = express();
-app.use(cors());
-app.use(express.json());
+const port = Number(process.env.PORT || 3001);
+const databaseUrl = process.env.DATABASE_URL;
+const projectId = process.env.FIREBASE_PROJECT_ID || 'linkboard-5af54';
 
-// Connect to MongoDB Atlas
-mongoose.connect(process.env.MONGODB_URI || process.env.MONGO_URI, { useNewUrlParser: true, useUnifiedTopology: true })
-  .then(() => console.log('Connected to MongoDB Atlas'))
-  .catch(err => console.error('MongoDB connection error:', err));
+if (!databaseUrl) {
+  throw new Error('DATABASE_URL is required. Copy server/.env.example to server/.env and set your PostgreSQL connection URL.');
+}
 
-// Define Mongoose Schemas
-const LinkSchema = new mongoose.Schema({
-  title: String,
-  url: String,
-  color: String,
+const firebaseServiceAccount = process.env.FIREBASE_SERVICE_ACCOUNT_JSON
+  ? JSON.parse(process.env.FIREBASE_SERVICE_ACCOUNT_JSON)
+  : null;
+
+const firebaseApp = getApps()[0] || initializeApp({
+  credential: firebaseServiceAccount ? cert(firebaseServiceAccount) : applicationDefault(),
+  projectId,
 });
 
-const BoardSchema = new mongoose.Schema({
-  title: String,
-  links: [LinkSchema],
-  userId: String, // Add user ID field
-  userEmail: String, // Add user email for reference
-  isPublic: { type: Boolean, default: false }, // Add public/private toggle
+const prisma = new PrismaClient({
+  adapter: new PrismaPg({ connectionString: databaseUrl }),
 });
 
-// User Profile Schema
-const UserProfileSchema = new mongoose.Schema({
-  userId: String,
-  email: String,
-  firstName: String,
-  lastName: String,
-  displayName: String,
-  updatedAt: { type: Date, default: Date.now }
+const app = Fastify({ logger: true });
+
+await app.register(cors, {
+  origin: process.env.CORS_ORIGIN
+    ? process.env.CORS_ORIGIN.split(',').map((origin) => origin.trim())
+    : true,
 });
 
-const Board = mongoose.model('UserBoards', BoardSchema);
-const UserProfile = mongoose.model('UserInfo', UserProfileSchema);
+app.addHook('onRequest', async (request, reply) => {
+  if (request.method === 'OPTIONS' || request.url === '/' || request.url === '/api/test' || request.url === '/api/health' || request.url === '/api/boards/public') {
+    return;
+  }
 
-// API Endpoints
-app.get('/api/boards', async (req, res) => {
+  const authorization = request.headers.authorization;
+  if (!authorization?.startsWith('Bearer ')) {
+    return reply.code(401).send({ error: 'A Firebase sign-in token is required' });
+  }
+
   try {
-    const { userId } = req.query;
-    if (!userId) {
-      return res.status(400).json({ error: 'User ID is required' });
+    const decodedToken = await getAuth(firebaseApp).verifyIdToken(authorization.slice(7));
+    request.user = { uid: decodedToken.uid, email: decodedToken.email || null };
+  } catch (error) {
+    request.log.warn({ err: error }, 'Firebase token verification failed');
+    return reply.code(401).send({ error: 'Invalid or expired sign-in token' });
+  }
+});
+
+function serializeLink(link) {
+  return { ...link, _id: link.id };
+}
+
+function serializeBoard(board) {
+  return {
+    ...board,
+    _id: board.id,
+    userId: board.ownerUid,
+    userEmail: board.ownerEmail,
+    order: board.sortOrder,
+    links: (board.links || []).map(serializeLink),
+  };
+}
+
+function normalizeLinks(links) {
+  if (!Array.isArray(links)) return null;
+  return links.map((link, position) => ({
+    title: String(link?.title || '').trim(),
+    url: String(link?.url || '').trim(),
+    color: typeof link?.color === 'string' ? link.color : null,
+    position,
+  }));
+}
+
+async function getBoard(id, ownerUid) {
+  const board = await prisma.board.findFirst({
+    where: { id, ownerUid },
+    include: { links: { orderBy: { position: 'asc' } } },
+  });
+  return board ? serializeBoard(board) : null;
+}
+
+app.get('/', async () => ({ message: 'LinkBoard API is running', status: 'healthy' }));
+
+app.get('/api/test', async () => ({ message: 'Server is running', timestamp: new Date().toISOString() }));
+
+app.get('/api/health', async (_request, reply) => {
+  try {
+    await prisma.$queryRaw`SELECT 1`;
+    return { status: 'healthy', database: 'connected' };
+  } catch (error) {
+    reply.code(503);
+    return { status: 'unavailable', database: 'disconnected' };
+  }
+});
+
+app.get('/api/boards', async (request) => {
+  const boards = await prisma.board.findMany({
+    where: { ownerUid: request.user.uid },
+    include: { links: { orderBy: { position: 'asc' } } },
+    orderBy: [{ sortOrder: 'asc' }, { createdAt: 'asc' }],
+  });
+  return boards.map(serializeBoard);
+});
+
+app.get('/api/boards/public', async () => {
+  const boards = await prisma.board.findMany({
+    where: { isPublic: true },
+    include: { links: { orderBy: { position: 'asc' } } },
+    orderBy: { createdAt: 'desc' },
+  });
+  return boards.map(serializeBoard);
+});
+
+app.post('/api/boards', async (request, reply) => {
+  const title = String(request.body?.title || '').trim();
+  if (!title) return reply.code(400).send({ error: 'Board title is required' });
+
+  const links = normalizeLinks(request.body?.links || []);
+  if (!links) return reply.code(400).send({ error: 'Links must be an array' });
+
+  const board = await prisma.board.create({
+    data: {
+      title,
+      ownerUid: request.user.uid,
+      ownerEmail: request.user.email,
+      links: { create: links },
+    },
+    include: { links: { orderBy: { position: 'asc' } } },
+  });
+  return reply.code(201).send(serializeBoard(board));
+});
+
+app.put('/api/boards/:id', async (request, reply) => {
+  const { id } = request.params;
+  const existing = await prisma.board.findFirst({ where: { id, ownerUid: request.user.uid } });
+  if (!existing) return reply.code(404).send({ error: 'Board not found' });
+
+  const data = {};
+  if (typeof request.body?.title === 'string') {
+    const title = request.body.title.trim();
+    if (!title) return reply.code(400).send({ error: 'Board title cannot be empty' });
+    data.title = title;
+  }
+  if (typeof request.body?.isPublic === 'boolean') data.isPublic = request.body.isPublic;
+  if (Number.isInteger(request.body?.order)) data.sortOrder = request.body.order;
+
+  const links = request.body?.links === undefined ? undefined : normalizeLinks(request.body.links);
+  if (request.body?.links !== undefined && !links) {
+    return reply.code(400).send({ error: 'Links must be an array' });
+  }
+  if (links?.some((link) => !link.title || !link.url)) {
+    return reply.code(400).send({ error: 'Each link needs a title and URL' });
+  }
+
+  const updated = await prisma.$transaction(async (tx) => {
+    await tx.board.update({ where: { id }, data });
+    if (links) {
+      await tx.link.deleteMany({ where: { boardId: id } });
+      if (links.length) {
+        await tx.link.createMany({ data: links.map((link) => ({ ...link, boardId: id })) });
+      }
     }
-    // Only return boards that have a userId field and match the current user
-    const boards = await Board.find({ 
-      userId: { $exists: true, $eq: userId } 
+    return tx.board.findUnique({
+      where: { id },
+      include: { links: { orderBy: { position: 'asc' } } },
     });
-    res.json(boards);
-  } catch (error) {
-    console.error('Error fetching boards:', error);
-    res.status(500).json({ error: 'Failed to fetch boards' });
-  }
+  });
+  return serializeBoard(updated);
 });
 
-// Get public boards (no authentication required)
-app.get('/api/boards/public', async (req, res) => {
-  try {
-    const publicBoards = await Board.find({ 
-      isPublic: true 
-    }).populate('userId', 'userEmail');
-    res.json(publicBoards);
-  } catch (error) {
-    console.error('Error fetching public boards:', error);
-    res.status(500).json({ error: 'Failed to fetch public boards' });
-  }
+app.delete('/api/boards/:id', async (request, reply) => {
+  const result = await prisma.board.deleteMany({
+    where: { id: request.params.id, ownerUid: request.user.uid },
+  });
+  if (!result.count) return reply.code(404).send({ error: 'Board not found' });
+  return { success: true };
 });
 
-app.post('/api/boards', async (req, res) => {
-  try {
-    const { userId, userEmail, ...boardData } = req.body;
-    if (!userId) {
-      return res.status(400).json({ error: 'User ID is required' });
-    }
-    const board = new Board({
-      ...boardData,
-      userId,
-      userEmail
-    });
-    await board.save();
-    res.json(board);
-  } catch (error) {
-    console.error('Error creating board:', error);
-    res.status(500).json({ error: 'Failed to create board' });
-  }
+app.delete('/api/boards', async (request) => {
+  const result = await prisma.board.deleteMany({ where: { ownerUid: request.user.uid } });
+  return { success: true, deletedCount: result.count };
 });
 
-app.put('/api/boards/:id', async (req, res) => {
-  try {
-    console.log('Updating board:', req.params.id, 'with data:', req.body);
-    
-    // First, let's check if the board exists
-    const existingBoard = await Board.findById(req.params.id);
-    console.log('Existing board before update:', existingBoard);
-    
-    if (!existingBoard) {
-      console.log('Board not found with ID:', req.params.id);
-      return res.status(404).json({ error: 'Board not found' });
-    }
-    
-    const board = await Board.findByIdAndUpdate(
-      req.params.id, 
-      req.body, 
-      { new: true, runValidators: true }
-    );
-    console.log('Updated board:', board);
-    
-    // Verify the update worked by fetching the board again
-    const verifyBoard = await Board.findById(req.params.id);
-    console.log('Verified board after update:', verifyBoard);
-    
-    res.json(board);
-  } catch (error) {
-    console.error('Error updating board:', error);
-    res.status(500).json({ error: 'Failed to update board' });
-  }
+app.get('/api/profile', async (request, reply) => {
+  const profile = await prisma.userProfile.findUnique({ where: { firebaseUid: request.user.uid } });
+  if (!profile) return reply.code(404).send({ error: 'Profile not found' });
+  return { ...profile, userId: profile.firebaseUid };
 });
 
-app.delete('/api/boards/:id', async (req, res) => {
-  try {
-    await Board.findByIdAndDelete(req.params.id);
-    res.json({ success: true });
-  } catch (error) {
-    console.error('Error deleting board:', error);
-    res.status(500).json({ error: 'Failed to delete board' });
+app.post('/api/profile', async (request, reply) => {
+  const firstName = String(request.body?.firstName || '').trim();
+  const lastName = String(request.body?.lastName || '').trim();
+  if (!firstName || !lastName) {
+    return reply.code(400).send({ error: 'First name and last name are required' });
   }
+
+  const displayName = `${firstName} ${lastName}`;
+  const profile = await prisma.userProfile.upsert({
+    where: { firebaseUid: request.user.uid },
+    create: {
+      firebaseUid: request.user.uid,
+      email: request.user.email,
+      firstName,
+      lastName,
+      displayName,
+    },
+    update: {
+      email: request.user.email,
+      firstName,
+      lastName,
+      displayName,
+      updatedAt: new Date(),
+    },
+  });
+  return { ...profile, userId: profile.firebaseUid };
 });
 
-// Delete all boards for a specific user (for account deletion)
-app.delete('/api/boards', async (req, res) => {
-  try {
-    const { userId } = req.query;
-    console.log('Received request to delete all boards for userId:', userId);
-    
-    if (!userId) {
-      console.log('Error: User ID is required');
-      return res.status(400).json({ error: 'User ID is required' });
-    }
-    
-    const result = await Board.deleteMany({ userId });
-    console.log('Deleted boards result:', result);
-    res.json({ success: true, deletedCount: result.deletedCount });
-  } catch (error) {
-    console.error('Error deleting user boards:', error);
-    res.status(500).json({ error: 'Failed to delete user boards' });
-  }
+app.delete('/api/profile', async (request) => {
+  await prisma.userProfile.deleteMany({ where: { firebaseUid: request.user.uid } });
+  return { success: true, message: 'Profile deleted successfully' };
 });
 
-// User Profile Endpoints
-app.get('/api/profile/:userId', async (req, res) => {
-  try {
-    const profile = await UserProfile.findOne({ userId: req.params.userId });
-    if (profile) {
-      res.json(profile);
-    } else {
-      res.status(404).json({ error: 'Profile not found' });
-    }
-  } catch (error) {
-    console.error('Error fetching profile:', error);
-    res.status(500).json({ error: 'Failed to fetch profile' });
-  }
-});
-
-app.post('/api/profile', async (req, res) => {
-  try {
-    const { userId, email, firstName, lastName } = req.body;
-    if (!userId || !firstName || !lastName) {
-      return res.status(400).json({ error: 'User ID, first name, and last name are required' });
-    }
-
-    const displayName = `${firstName.trim()} ${lastName.trim()}`;
-    
-    const profile = await UserProfile.findOneAndUpdate(
-      { userId },
-      {
-        userId,
-        email,
-        firstName: firstName.trim(),
-        lastName: lastName.trim(),
-        displayName,
-        updatedAt: new Date()
-      },
-      { upsert: true, new: true }
-    );
-
-    res.json(profile);
-  } catch (error) {
-    console.error('Error updating profile:', error);
-    res.status(500).json({ error: 'Failed to update profile' });
-  }
-});
-
-app.delete('/api/profile/:userId', async (req, res) => {
-  try {
-    console.log('Received request to delete profile for userId:', req.params.userId);
-    const result = await UserProfile.findOneAndDelete({ userId: req.params.userId });
-    console.log('Profile deletion result:', result);
-    
-    if (result) {
-      res.json({ success: true, message: 'Profile deleted successfully' });
-    } else {
-      res.status(404).json({ error: 'Profile not found' });
-    }
-  } catch (error) {
-    console.error('Error deleting profile:', error);
-    res.status(500).json({ error: 'Failed to delete profile' });
-  }
-});
-
-// Migration endpoint to clean up old boards (optional)
-app.delete('/api/boards/cleanup/old', async (req, res) => {
-  try {
-    // Delete all boards that don't have a userId (old data)
-    const result = await Board.deleteMany({ userId: { $exists: false } });
-    res.json({ 
-      success: true, 
-      message: `Deleted ${result.deletedCount} old boards without userId` 
-    });
-  } catch (error) {
-    console.error('Error cleaning up old boards:', error);
-    res.status(500).json({ error: 'Failed to cleanup old boards' });
-  }
-});
-
-// Test endpoint to check if server is running
-app.get('/api/test', (req, res) => {
-  res.json({ 
-    message: 'Server is running', 
-    timestamp: new Date().toISOString(),
-    mongodb: mongoose.connection.readyState === 1 ? 'connected' : 'disconnected'
+app.setErrorHandler((error, request, reply) => {
+  request.log.error({ err: error }, 'API request failed');
+  reply.code(error.statusCode && error.statusCode < 500 ? error.statusCode : 500).send({
+    error: error.statusCode && error.statusCode < 500 ? error.message : 'Internal server error',
   });
 });
 
-// Root endpoint for basic health check
-app.get('/', (req, res) => {
-  res.json({ 
-    message: 'LinkBoard API is running', 
-    status: 'healthy',
-    timestamp: new Date().toISOString()
-  });
-});
+try {
+  await prisma.$connect();
+  await app.listen({ port, host: '0.0.0.0' });
+  app.log.info(`LinkBoard API listening on port ${port}`);
+} catch (error) {
+  app.log.error(error);
+  await prisma.$disconnect();
+  process.exit(1);
+}
 
-// Test endpoint to check MongoDB connection and create a test board
-app.get('/api/test-mongo', async (req, res) => {
-  try {
-    // Test creating a simple board
-    const testBoard = new Board({
-      title: 'Test Board',
-      links: [{ title: 'Test Link', url: 'https://example.com', color: '#000000' }],
-      userId: 'test-user',
-      userEmail: 'test@example.com'
-    });
-    
-    const savedBoard = await testBoard.save();
-    console.log('Test board created:', savedBoard);
-    
-    // Delete the test board
-    await Board.findByIdAndDelete(savedBoard._id);
-    
-    res.json({ 
-      message: 'MongoDB is working correctly',
-      testBoard: savedBoard,
-      deleted: true
-    });
-  } catch (error) {
-    console.error('MongoDB test failed:', error);
-    res.status(500).json({ error: 'MongoDB test failed', details: error.message });
-  }
-});
-
-const PORT = process.env.PORT || 3001;
-app.listen(PORT, () => console.log(`Server running on port ${PORT}`));
-    
+const shutdown = async () => {
+  await app.close();
+  await prisma.$disconnect();
+  process.exit(0);
+};
+process.on('SIGINT', shutdown);
+process.on('SIGTERM', shutdown);

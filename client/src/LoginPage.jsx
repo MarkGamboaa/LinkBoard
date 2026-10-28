@@ -17,7 +17,7 @@ export default function LoginPage({ onBack, onSignup, onLogin }) {
     try {
       const userCredential = await signInWithEmailAndPassword(auth, email, password);
       if (onLogin) onLogin(userCredential.user);
-    } catch (err) {
+    } catch {
       setError("Invalid email or password");
     } finally {
       setLoading(false);
