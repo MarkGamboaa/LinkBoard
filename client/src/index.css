@@ -12,6 +12,12 @@ body {
   font-family: var(--font-ui);
 }
 
+/* Use the app's password toggle instead of Edge's built-in reveal control. */
+.password-input-no-native-reveal::-ms-reveal,
+.password-input-no-native-reveal::-ms-clear {
+  display: none;
+}
+
 /* Logo font class */
 .font-logo {
   font-family: var(--font-logo);

@@ -17,6 +17,7 @@ export default function ProfilePage({ user, onBack, onLogout, onUserUpdate }) {
   const [currentPassword, setCurrentPassword] = useState('');
   const [newPassword, setNewPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
+  const [visiblePasswordFields, setVisiblePasswordFields] = useState({});
   const [changingPassword, setChangingPassword] = useState(false);
   const [passwordError, setPasswordError] = useState('');
   const [deleteAccountModal, setDeleteAccountModal] = useState(false);
@@ -25,6 +26,10 @@ export default function ProfilePage({ user, onBack, onLogout, onUserUpdate }) {
   const [deleteError, setDeleteError] = useState('');
   const [logoutLoading, setLogoutLoading] = useState(false);
   const fileInputRef = useRef(null);
+
+  const togglePasswordVisibility = (field) => {
+    setVisiblePasswordFields((current) => ({ ...current, [field]: !current[field] }));
+  };
 
   // Debug logging for user prop changes
   useEffect(() => {
@@ -357,12 +362,12 @@ export default function ProfilePage({ user, onBack, onLogout, onUserUpdate }) {
         </header>
 
         <main className="flex-1 flex flex-col items-center justify-start px-4 sm:px-6">
-          <div className="bg-white bg-opacity-60 rounded-xl sm:rounded-2xl shadow-xl w-full max-w-2xl h-[calc(100vh-120px)] sm:h-[calc(100vh-115px)] max-h-full sm:max-h-[900px] flex flex-col justify-start items-center p-2 sm:p-4 lg:p-8 mt-0 overflow-y-auto">
+          <div className="bg-white bg-opacity-60 rounded-xl sm:rounded-2xl shadow-xl w-full max-w-6xl min-h-fit flex flex-col justify-start items-center p-3 sm:p-6 lg:p-8 mt-0 overflow-y-auto">
           
           {/* Profile Content */}
-          <div className="w-full max-w-2xl space-y-4 sm:space-y-6 pb-4 sm:pb-8">
+          <div className="w-full space-y-5 sm:space-y-7 pb-4 sm:pb-8">
             {/* Profile Header */}
-            <div className="text-center space-y-3 sm:space-y-4">
+            <div className="flex flex-col items-center gap-3 text-center sm:flex-row sm:items-center sm:gap-5 sm:text-left">
               <div className="relative inline-block group">
                 <div className="avatar">
                   <div className="w-20 h-20 sm:w-24 sm:h-24 rounded-full">
@@ -441,34 +446,34 @@ export default function ProfilePage({ user, onBack, onLogout, onUserUpdate }) {
             </div>
 
             {/* Profile Information */}
-            <div className="space-y-3 sm:space-y-4">
+            <div className="grid grid-cols-1 items-start gap-4 sm:gap-6 lg:grid-cols-2">
               <div className="card bg-white/80 backdrop-blur">
                 <div className="card-body p-4 sm:p-6">
-                  <h3 className="card-title text-base sm:text-lg font-semibold">Account Information</h3>
-                  <div className="space-y-2 sm:space-y-3">
+                  <h3 className="card-title col-span-full text-base sm:text-lg font-semibold">Account Information</h3>
+                  <div className="grid grid-cols-1 gap-x-6 gap-y-3 sm:grid-cols-2">
                     {editMode ? (
                       <>
-                        <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-2">
+                        <div className="flex min-w-0 flex-col gap-1">
                           <span className="font-medium text-gray-700 text-sm sm:text-base">First Name:</span>
                           <input
                             type="text"
                             value={firstName}
                             onChange={(e) => setFirstName(e.target.value)}
-                            className="input input-bordered input-sm w-full sm:w-32"
+                            className="input input-bordered input-sm w-full"
                             placeholder="First Name"
                           />
                         </div>
-                        <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-2">
+                        <div className="flex min-w-0 flex-col gap-1">
                           <span className="font-medium text-gray-700 text-sm sm:text-base">Last Name:</span>
                           <input
                             type="text"
                             value={lastName}
                             onChange={(e) => setLastName(e.target.value)}
-                            className="input input-bordered input-sm w-full sm:w-32"
+                            className="input input-bordered input-sm w-full"
                             placeholder="Last Name"
                           />
                         </div>
-                        <div className="flex gap-2 justify-end mt-2">
+                        <div className="col-span-full flex gap-2 justify-end mt-2">
                           <button 
                             className="btn btn-sm btn-ghost" 
                             onClick={handleCancelEdit}
@@ -487,21 +492,21 @@ export default function ProfilePage({ user, onBack, onLogout, onUserUpdate }) {
                       </>
                     ) : (
                       <>
-                        <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-1">
+                        <div className="flex min-w-0 flex-col gap-1">
                           <span className="font-medium text-gray-700 text-sm sm:text-base">First Name:</span>
                           <span className="text-gray-900 text-sm sm:text-base break-all">{userProfile?.firstName || user?.displayName?.split(' ')[0] || 'Not set'}</span>
                         </div>
-                        <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-1">
+                        <div className="flex min-w-0 flex-col gap-1">
                           <span className="font-medium text-gray-700 text-sm sm:text-base">Last Name:</span>
                           <span className="text-gray-900 text-sm sm:text-base break-all">{userProfile?.lastName || user?.displayName?.split(' ').slice(1).join(' ') || 'Not set'}</span>
                         </div>
                       </>
                     )}
-                    <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-1">
+                    <div className="flex min-w-0 flex-col gap-1">
                       <span className="font-medium text-gray-700 text-sm sm:text-base">Email:</span>
                       <span className="text-gray-900 text-sm sm:text-base break-all">{user?.email}</span>
                     </div>
-                    <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-1">
+                    <div className="flex min-w-0 flex-col gap-1">
                       <span className="font-medium text-gray-700 text-sm sm:text-base">Account Created:</span>
                       <span className="text-gray-900 text-sm sm:text-base">
                         {user?.metadata?.creationTime ? 
@@ -509,7 +514,7 @@ export default function ProfilePage({ user, onBack, onLogout, onUserUpdate }) {
                           'Unknown'}
                       </span>
                     </div>
-                    <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-1">
+                    <div className="flex min-w-0 flex-col gap-1">
                       <span className="font-medium text-gray-700 text-sm sm:text-base">Last Sign In:</span>
                       <span className="text-gray-900 text-sm sm:text-base">
                         {user?.metadata?.lastSignInTime ? 
@@ -522,12 +527,13 @@ export default function ProfilePage({ user, onBack, onLogout, onUserUpdate }) {
               </div>
 
               {/* Account Actions */}
+              <div className="space-y-4">
               <div className="card bg-white/80 backdrop-blur">
                 <div className="p-3 sm:p-4 space-y-2">
                   <h3 className="card-title text-base sm:text-lg font-semibold">Account Actions</h3>
-                  <div className="flex flex-col sm:flex-row gap-2">
+                  <div className="grid grid-cols-1 gap-2 xl:grid-cols-2">
                     <button 
-                      className="btn btn-outline btn-primary flex-1 text-sm sm:text-base" 
+                      className="btn btn-outline btn-primary min-w-0 whitespace-nowrap text-sm sm:text-base" 
                       onClick={handleEditProfile}
                       disabled={editMode}
                     >
@@ -537,7 +543,7 @@ export default function ProfilePage({ user, onBack, onLogout, onUserUpdate }) {
                       Edit Profile
                     </button>
                     <button 
-                      className="btn btn-outline btn-secondary flex-1 text-sm sm:text-base" 
+                      className="btn btn-outline btn-secondary min-w-0 whitespace-nowrap text-sm sm:text-base" 
                       onClick={handleChangePassword}
                     >
                       <svg className="w-4 h-4 sm:w-5 sm:h-5 mr-1 sm:mr-2" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
@@ -562,6 +568,7 @@ export default function ProfilePage({ user, onBack, onLogout, onUserUpdate }) {
                     Delete Account
                   </button>
                 </div>
+              </div>
               </div>
             </div>
           </div>
@@ -589,26 +596,68 @@ export default function ProfilePage({ user, onBack, onLogout, onUserUpdate }) {
                 <label className="label">
                   <span className="label-text text-sm sm:text-base">Current Password</span>
                 </label>
-                <input
-                  type="password"
-                  value={currentPassword}
-                  onChange={(e) => setCurrentPassword(e.target.value)}
-                  className="input input-bordered w-full text-sm sm:text-base"
-                  placeholder="Enter current password"
-                />
+                <div className="relative">
+                  <input
+                    type={visiblePasswordFields.current ? 'text' : 'password'}
+                    value={currentPassword}
+                    onChange={(e) => setCurrentPassword(e.target.value)}
+                    className="password-input-no-native-reveal input input-bordered w-full pr-12 text-sm sm:text-base"
+                    placeholder="Enter current password"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => togglePasswordVisibility('current')}
+                    className="absolute right-3 top-1/2 -translate-y-1/2 rounded p-1 text-gray-500 hover:bg-gray-100 hover:text-gray-800 focus-visible:outline focus-visible:outline-2 focus-visible:outline-indigo-600"
+                    aria-label={visiblePasswordFields.current ? 'Hide current password' : 'Show current password'}
+                    title={visiblePasswordFields.current ? 'Hide password' : 'Show password'}
+                  >
+                    {visiblePasswordFields.current ? (
+                      <svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" className="h-5 w-5">
+                        <path strokeLinecap="round" strokeLinejoin="round" d="m3 3 18 18M10.6 10.6a2 2 0 0 0 2.8 2.8" />
+                        <path strokeLinecap="round" strokeLinejoin="round" d="M9.9 5.2A10.8 10.8 0 0 1 12 5c5 0 8.5 4.2 9.5 6.1a1.8 1.8 0 0 1 0 1.8 12 12 0 0 1-3.1 3.5M6.2 6.2A13 13 0 0 0 2.5 11a1.8 1.8 0 0 0 0 1.8A10.8 10.8 0 0 0 12 19c.8 0 1.6-.1 2.3-.3" />
+                      </svg>
+                    ) : (
+                      <svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" className="h-5 w-5">
+                        <path strokeLinecap="round" strokeLinejoin="round" d="M2.5 12s3.5-7 9.5-7 9.5 7 9.5 7-3.5 7-9.5 7-9.5-7-9.5-7Z" />
+                        <circle cx="12" cy="12" r="2.5" />
+                      </svg>
+                    )}
+                  </button>
+                </div>
               </div>
               
               <div>
                 <label className="label">
                   <span className="label-text text-sm sm:text-base">New Password</span>
                 </label>
-                <input
-                  type="password"
-                  value={newPassword}
-                  onChange={(e) => setNewPassword(e.target.value)}
-                  className="input input-bordered w-full text-sm sm:text-base"
-                  placeholder="Enter new password"
-                />
+                <div className="relative">
+                  <input
+                    type={visiblePasswordFields.new ? 'text' : 'password'}
+                    value={newPassword}
+                    onChange={(e) => setNewPassword(e.target.value)}
+                    className="password-input-no-native-reveal input input-bordered w-full pr-12 text-sm sm:text-base"
+                    placeholder="Enter new password"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => togglePasswordVisibility('new')}
+                    className="absolute right-3 top-1/2 -translate-y-1/2 rounded p-1 text-gray-500 hover:bg-gray-100 hover:text-gray-800 focus-visible:outline focus-visible:outline-2 focus-visible:outline-indigo-600"
+                    aria-label={visiblePasswordFields.new ? 'Hide new password' : 'Show new password'}
+                    title={visiblePasswordFields.new ? 'Hide password' : 'Show password'}
+                  >
+                    {visiblePasswordFields.new ? (
+                      <svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" className="h-5 w-5">
+                        <path strokeLinecap="round" strokeLinejoin="round" d="m3 3 18 18M10.6 10.6a2 2 0 0 0 2.8 2.8" />
+                        <path strokeLinecap="round" strokeLinejoin="round" d="M9.9 5.2A10.8 10.8 0 0 1 12 5c5 0 8.5 4.2 9.5 6.1a1.8 1.8 0 0 1 0 1.8 12 12 0 0 1-3.1 3.5M6.2 6.2A13 13 0 0 0 2.5 11a1.8 1.8 0 0 0 0 1.8A10.8 10.8 0 0 0 12 19c.8 0 1.6-.1 2.3-.3" />
+                      </svg>
+                    ) : (
+                      <svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" className="h-5 w-5">
+                        <path strokeLinecap="round" strokeLinejoin="round" d="M2.5 12s3.5-7 9.5-7 9.5 7 9.5 7-3.5 7-9.5 7-9.5-7-9.5-7Z" />
+                        <circle cx="12" cy="12" r="2.5" />
+                      </svg>
+                    )}
+                  </button>
+                </div>
                 <div className="text-xs text-gray-500 mt-1">
                   Must be at least 8 characters with 1 uppercase letter and 1 special character
                 </div>
@@ -618,13 +667,34 @@ export default function ProfilePage({ user, onBack, onLogout, onUserUpdate }) {
                 <label className="label">
                   <span className="label-text text-sm sm:text-base">Confirm New Password</span>
                 </label>
-                <input
-                  type="password"
-                  value={confirmPassword}
-                  onChange={(e) => setConfirmPassword(e.target.value)}
-                  className="input input-bordered w-full text-sm sm:text-base"
-                  placeholder="Confirm new password"
-                />
+                <div className="relative">
+                  <input
+                    type={visiblePasswordFields.confirm ? 'text' : 'password'}
+                    value={confirmPassword}
+                    onChange={(e) => setConfirmPassword(e.target.value)}
+                    className="password-input-no-native-reveal input input-bordered w-full pr-12 text-sm sm:text-base"
+                    placeholder="Confirm new password"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => togglePasswordVisibility('confirm')}
+                    className="absolute right-3 top-1/2 -translate-y-1/2 rounded p-1 text-gray-500 hover:bg-gray-100 hover:text-gray-800 focus-visible:outline focus-visible:outline-2 focus-visible:outline-indigo-600"
+                    aria-label={visiblePasswordFields.confirm ? 'Hide confirmation password' : 'Show confirmation password'}
+                    title={visiblePasswordFields.confirm ? 'Hide password' : 'Show password'}
+                  >
+                    {visiblePasswordFields.confirm ? (
+                      <svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" className="h-5 w-5">
+                        <path strokeLinecap="round" strokeLinejoin="round" d="m3 3 18 18M10.6 10.6a2 2 0 0 0 2.8 2.8" />
+                        <path strokeLinecap="round" strokeLinejoin="round" d="M9.9 5.2A10.8 10.8 0 0 1 12 5c5 0 8.5 4.2 9.5 6.1a1.8 1.8 0 0 1 0 1.8 12 12 0 0 1-3.1 3.5M6.2 6.2A13 13 0 0 0 2.5 11a1.8 1.8 0 0 0 0 1.8A10.8 10.8 0 0 0 12 19c.8 0 1.6-.1 2.3-.3" />
+                      </svg>
+                    ) : (
+                      <svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" className="h-5 w-5">
+                        <path strokeLinecap="round" strokeLinejoin="round" d="M2.5 12s3.5-7 9.5-7 9.5 7 9.5 7-3.5 7-9.5 7-9.5-7-9.5-7Z" />
+                        <circle cx="12" cy="12" r="2.5" />
+                      </svg>
+                    )}
+                  </button>
+                </div>
               </div>
             </div>
 

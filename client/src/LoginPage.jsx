@@ -3,7 +3,7 @@ import { signInWithEmailAndPassword } from "firebase/auth";
 import { auth } from "./firebase";
 import LinkBoardLogo from "./assets/linkboardlogo.svg";
 
-export default function LoginPage({ onBack, onSignup, onLogin }) {
+export default function LoginPage({ onBack, onSignup, onLogin, continueWithBoardCopy = false }) {
   const [showPassword, setShowPassword] = useState(false);
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -38,6 +38,7 @@ export default function LoginPage({ onBack, onSignup, onLogin }) {
             <img src={LinkBoardLogo} alt="LinkBoard Logo" className="w-full h-full object-contain" />
           </div>
           <h2 className="text-2xl font-bold text-center mb-2">Log in</h2>
+          {continueWithBoardCopy && <p className="mb-4 text-center text-sm text-gray-600">Log in and we’ll add that public board to your private boards.</p>}
           {/* ...existing code... */}
           <form className="w-full flex flex-col gap-4" onSubmit={handleSubmit}>
             <div>

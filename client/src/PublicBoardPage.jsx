@@ -2,10 +2,14 @@ import React, { useState, useEffect } from "react";
 import LinkCard from "./LinkCard";
 import Masonry from "react-masonry-css";
 import LoadingSpinner from "./components/LoadingSpinner.jsx";
+import { apiFetch } from "./firebase";
+import { getApiUrl } from "./utils/api";
 
-export default function PublicBoardPage({ onLogin, onSignup, onBackToDashboard, isLoggedIn = false }) {
+export default function PublicBoardPage({ onLogin, onSignup, onBackToDashboard, onRequireLoginToCopy, isLoggedIn = false }) {
   const [publicBoards, setPublicBoards] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [copyingBoardId, setCopyingBoardId] = useState(null);
+  const [copiedBoardIds, setCopiedBoardIds] = useState(() => new Set());
 
   // Dynamically set columns based on number of boards
   const maxCols = 4;
@@ -25,7 +29,7 @@ export default function PublicBoardPage({ onLogin, onSignup, onBackToDashboard, 
   const fetchPublicBoards = async () => {
     try {
       console.log('Fetching public boards...');
-      const response = await fetch(`${import.meta.env.VITE_API_URL || 'http://127.0.0.1:3001'}/api/boards/public`);
+      const response = await fetch(getApiUrl('/api/boards/public'), { cache: 'no-store' });
       console.log('Fetch public boards response status:', response.status);
       
       if (!response.ok) {
@@ -39,6 +43,43 @@ export default function PublicBoardPage({ onLogin, onSignup, onBackToDashboard, 
       console.error('Error fetching public boards:', error);
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handleUseBoard = async (board) => {
+    if (!isLoggedIn) {
+      onRequireLoginToCopy?.(board._id);
+      return;
+    }
+    if (copyingBoardId) return;
+
+    setCopyingBoardId(board._id);
+    try {
+      const response = await apiFetch(`/api/boards/${encodeURIComponent(board._id)}/copy`, { method: 'POST' });
+      const result = await response.json().catch(() => ({}));
+      if (!response.ok) {
+        const routeMissing = response.status === 404 && String(result.message || '').startsWith('Route POST:');
+        throw new Error(routeMissing
+          ? 'The API server does not have the board-copy route yet. Restart or redeploy the server, then try again.'
+          : result.error || result.message || 'Could not copy this board. Please try again.');
+      }
+      setCopiedBoardIds((current) => new Set(current).add(board._id));
+      if (result.title !== board.title) {
+        const renameResponse = await apiFetch(`/api/boards/${encodeURIComponent(result._id)}`, {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ title: board.title }),
+        });
+        if (!renameResponse.ok) {
+          window.showToast?.(`Board copied, but could not remove “(copy)” from its title.`, 'error');
+          return;
+        }
+      }
+      window.showToast?.(`Copied as “${board.title}” to your private boards.`, 'success');
+    } catch (error) {
+      window.showToast?.(error.message || 'Could not copy this board. Please try again.', 'error');
+    } finally {
+      setCopyingBoardId(null);
     }
   };
 
@@ -90,27 +131,17 @@ export default function PublicBoardPage({ onLogin, onSignup, onBackToDashboard, 
         </header>
 
         <main className="flex-1 flex flex-col items-center justify-start px-2 sm:px-6">
-          <div className="bg-white bg-opacity-60 rounded-xl sm:rounded-2xl shadow-xl w-full h-[calc(100vh-120px)] sm:h-[calc(100vh-115px)] max-h-full sm:max-h-[900px] flex flex-col justify-start items-center p-1 sm:p-8 pt-4 overflow-y-auto">
+          <div className="w-full h-[calc(100vh-120px)] sm:h-[calc(100vh-115px)] max-h-full sm:max-h-[900px] flex flex-col justify-start items-center p-1 sm:p-8 pt-4 overflow-y-auto">
             {publicBoards.length === 0 ? (
               <div className="flex flex-col items-center justify-center h-full text-center">
                 <h2 className="text-2xl font-bold text-gray-700 mb-4">No Public Boards Available</h2>
                 <p className="text-gray-600 mb-6">Be the first to share your link board with the community!</p>
-                <div className="flex gap-4">
-                  {isLoggedIn ? (
-                    <button className="btn btn-primary" onClick={onBackToDashboard}>
-                      Go to Your Dashboard
-                    </button>
-                  ) : (
-                    <>
-                      <button className="btn btn-primary" onClick={onSignup}>
-                        Create Your Board
-                      </button>
-                      <button className="btn btn-ghost" onClick={onLogin}>
-                        Login to View Private Boards
-                      </button>
-                    </>
-                  )}
-                </div>
+                {!isLoggedIn && (
+                  <div className="flex gap-4">
+                    <button className="btn btn-primary" onClick={onSignup}>Create Your Board</button>
+                    <button className="btn btn-ghost" onClick={onLogin}>Login to View Private Boards</button>
+                  </div>
+                )}
               </div>
             ) : (
               <>
@@ -134,31 +165,45 @@ export default function PublicBoardPage({ onLogin, onSignup, onBackToDashboard, 
                         isReadOnly={true}
                         isPublic={true}
                         userEmail={board.userEmail}
+                        headerAction={(
+                          <button
+                            type="button"
+                            className={`inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-full border-0 p-0 text-[0px] leading-none align-middle transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-indigo-600 ${copiedBoardIds.has(board._id) ? 'bg-emerald-50 text-emerald-700' : 'bg-indigo-50 text-indigo-700 hover:bg-indigo-100'}`}
+                            onClick={() => handleUseBoard(board)}
+                            disabled={copyingBoardId !== null || copiedBoardIds.has(board._id)}
+                            title={copyingBoardId === board._id ? 'Copying board' : copiedBoardIds.has(board._id) ? 'Board added to your boards' : isLoggedIn ? 'Copy this board to your boards' : 'Sign in to copy this board'}
+                            aria-label={copyingBoardId === board._id ? 'Copying board' : copiedBoardIds.has(board._id) ? 'Board added to your boards' : isLoggedIn ? 'Copy this board to your boards' : 'Sign in to copy this board'}
+                          >
+                            {copyingBoardId === board._id ? (
+                              <span className="loading loading-spinner loading-xs" aria-hidden="true" />
+                            ) : copiedBoardIds.has(board._id) ? (
+                              <svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="h-4 w-4">
+                                <path strokeLinecap="round" strokeLinejoin="round" d="m5 12 4 4L19 6" />
+                              </svg>
+                            ) : (
+                              <svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" className="h-4 w-4">
+                                <rect x="8" y="8" width="12" height="12" rx="2" />
+                                <path strokeLinecap="round" strokeLinejoin="round" d="M16 8V5a1 1 0 0 0-1-1H5a1 1 0 0 0-1 1v10a1 1 0 0 0 1 1h3" />
+                              </svg>
+                            )}
+                            {copyingBoardId === board._id
+                              ? 'Copying…'
+                              : copiedBoardIds.has(board._id)
+                                ? 'Added to your boards'
+                                : isLoggedIn ? 'Use this board' : 'Sign in to use this board'}
+                          </button>
+                        )}
                       />
                     </div>
                   ))}
                 </Masonry>
                 
                 {/* Call to Action */}
-                <div className="mt-auto self-center text-center">
-                  {isLoggedIn ? (
-                    <>
-                      <div className="flex gap-4 justify-center">
-                        <button className="btn btn-primary" onClick={onBackToDashboard}>
-                          Go to Your Dashboard
-                        </button>
-                      </div>
-                    </>
-                  ) : (
-                    <>
-                      <div className="flex gap-4 justify-center">
-                        <button className="btn btn-primary" onClick={onSignup}>
-                          Create Your Board
-                        </button>
-                      </div>
-                    </>
-                  )}
-                </div>
+                {!isLoggedIn && (
+                  <div className="mt-auto self-center text-center">
+                    <button className="btn btn-primary" onClick={onSignup}>Create Your Board</button>
+                  </div>
+                )}
               </>
             )}
           </div>

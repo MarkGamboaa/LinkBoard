@@ -9,6 +9,8 @@ export default function LinkCard({
   onDeleteLink,
   onReorderLinks,
   onEditLink,
+  headerAction = null,
+  footerAction = null,
   onOpen,
   expanded = false,
   hideHeader = false,
@@ -133,16 +135,17 @@ export default function LinkCard({
       }}
     >
       {/* Category and Delete */}
-      {!hideHeader && <div className="w-full flex justify-between items-center mb-4">
-        <div className="flex flex-col">
+      {!hideHeader && <div className="w-full flex justify-between items-start mb-4">
+        <div className="flex min-w-0 flex-1 flex-col pr-2">
           {onOpen && !expanded ? (
-            <button type="button" onClick={onOpen} className="text-blue-700 font-bold text-lg text-left hover:underline">{category}</button>
-          ) : <span className="text-blue-700 font-bold text-lg">{category}</span>}
+            <button type="button" onClick={onOpen} className="w-full min-w-0 whitespace-normal break-words [overflow-wrap:anywhere] text-left text-lg font-bold text-blue-700 hover:underline">{category}</button>
+          ) : <span className="min-w-0 whitespace-normal break-words [overflow-wrap:anywhere] text-lg font-bold text-blue-700">{category}</span>}
           {userEmail && (
             <span className="text-xs text-gray-500 mt-1">by {userEmail}</span>
           )}
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex shrink-0 items-center gap-2">
+          {headerAction}
           {/* Public/Private Toggle */}
           {!isReadOnly && isOwner && onTogglePublic && (
             <button
@@ -268,6 +271,7 @@ export default function LinkCard({
           )}
         </button>
       )}
+      {footerAction}
     </div>
   );
 }

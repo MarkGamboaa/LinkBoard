@@ -50,6 +50,7 @@ function App() {
   const [inviteToken, setInviteToken] = useState(() => new URLSearchParams(window.location.search).get('invite'));
   const [page, setPageState] = useState(getPageFromLocation);
   const [user, setUser] = useState(null);
+  const [pendingBoardCopyId, setPendingBoardCopyId] = useState(null);
   const [loading, setLoading] = useState(true);
 
   const navigate = (nextPage, { replace = false } = {}) => {
@@ -144,6 +145,8 @@ function App() {
           onLogout={handleLogout}
           onProfile={() => navigate('profile')}
           onPublic={() => navigate('public')}
+          pendingBoardCopyId={pendingBoardCopyId}
+          onPendingBoardCopyHandled={() => setPendingBoardCopyId(null)}
         />
         <ToastContainer />
       </>
@@ -173,6 +176,10 @@ function App() {
           onLogin={() => navigate('login')} 
           onSignup={() => navigate('signup')} 
           onBackToDashboard={() => goBack(user ? 'dashboard' : 'landing')}
+          onRequireLoginToCopy={(boardId) => {
+            setPendingBoardCopyId(boardId);
+            navigate('login');
+          }}
           isLoggedIn={!!user}
         />
         <ToastContainer />
@@ -182,7 +189,7 @@ function App() {
   if (page === 'signup') {
     return (
       <>
-        <SignupPage onBack={() => goBack('landing')} onLogin={() => navigate('login')} />
+        <SignupPage onBack={() => goBack('landing')} onLogin={() => navigate('login')} continueWithBoardCopy={Boolean(pendingBoardCopyId)} />
         <ToastContainer />
       </>
     );
@@ -190,7 +197,7 @@ function App() {
   if (page === 'login') {
     return (
       <>
-        <LoginPage onBack={() => goBack('landing')} onSignup={() => navigate('signup')} onLogin={user => { setUser(user); navigate(inviteToken ? 'invite' : 'dashboard'); }} />
+        <LoginPage onBack={() => goBack('landing')} onSignup={() => navigate('signup')} continueWithBoardCopy={Boolean(pendingBoardCopyId)} onLogin={user => { setUser(user); navigate(inviteToken ? 'invite' : 'dashboard', { replace: true }); }} />
         <ToastContainer />
       </>
     );

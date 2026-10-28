@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import LinkCard from "./LinkCard";
 import Masonry from "react-masonry-css";
 import LoadingSpinner from "./components/LoadingSpinner.jsx";
@@ -17,7 +17,25 @@ const getTemplateLinkTextColor = (color) => {
   return brightness < 128 ? '#ffffff' : '#111827';
 };
 
-export default function DashboardPage({ onLogout, user: initialUser, onProfile, onPublic }) {
+const removeGeneratedCopySuffix = async (board) => {
+  const title = String(board?.title || '').replace(/\s+\(copy\)$/i, '').trim();
+  if (!board?.isOwner || !title || title === board.title) return board;
+
+  try {
+    const response = await apiFetch(`/api/boards/${encodeURIComponent(board._id)}`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ title }),
+    });
+    if (!response.ok) throw new Error(`HTTP ${response.status}`);
+    return await response.json();
+  } catch (error) {
+    console.error(`Could not remove generated copy suffix from board ${board._id}:`, error);
+    return board;
+  }
+};
+
+export default function DashboardPage({ onLogout, user: initialUser, onProfile, onPublic, pendingBoardCopyId = null, onPendingBoardCopyHandled }) {
   const [user, setUser] = useState(initialUser);
   const [userProfile, setUserProfile] = useState(null);
   const [menuOpen, setMenuOpen] = useState(false);
@@ -40,7 +58,9 @@ export default function DashboardPage({ onLogout, user: initialUser, onProfile, 
   const [inviteEmail, setInviteEmail] = useState("");
   const [inviteLink, setInviteLink] = useState("");
   const [inviteError, setInviteError] = useState("");
+  const [inviteNotice, setInviteNotice] = useState(null);
   const [creatingInvite, setCreatingInvite] = useState(false);
+  const [inviteMode, setInviteMode] = useState(null);
   const [loading, setLoading] = useState(true);
   const [logoutLoading, setLogoutLoading] = useState(false);
   const [addingLinkLoading, setAddingLinkLoading] = useState(false);
@@ -55,6 +75,10 @@ export default function DashboardPage({ onLogout, user: initialUser, onProfile, 
   const [boardDeleteTarget, setBoardDeleteTarget] = useState(null);
   const [boardDeleteError, setBoardDeleteError] = useState('');
   const [deletingBoard, setDeletingBoard] = useState(false);
+  const [leaveBoardTarget, setLeaveBoardTarget] = useState(null);
+  const [leaveBoardError, setLeaveBoardError] = useState('');
+  const [leavingBoard, setLeavingBoard] = useState(false);
+  const handledBoardCopies = useRef(new Set());
 
   // Dynamically set columns based on number of boards
   const maxCols = 4;
@@ -71,6 +95,27 @@ export default function DashboardPage({ onLogout, user: initialUser, onProfile, 
     fetchUserProfile();
     fetchBoards();
   }, []);
+
+  useEffect(() => {
+    if (!pendingBoardCopyId || loading || handledBoardCopies.current.has(pendingBoardCopyId)) return;
+    handledBoardCopies.current.add(pendingBoardCopyId);
+    onPendingBoardCopyHandled?.();
+
+    const copyPendingBoard = async () => {
+      try {
+        const response = await apiFetch(`/api/boards/${encodeURIComponent(pendingBoardCopyId)}/copy`, { method: 'POST' });
+        const result = await response.json().catch(() => ({}));
+        if (!response.ok) throw new Error(result.error || 'Could not copy this board. Please try again.');
+        const cleanedResult = await removeGeneratedCopySuffix(result);
+        result.title = cleanedResult.title;
+        setBoards((current) => [...current, cleanedResult]);
+        window.showToast?.(`Copied as “${result.title}” to your private boards.`, 'success');
+      } catch (error) {
+        window.showToast?.(error.message || 'Could not copy this board. Please try again.', 'error');
+      }
+    };
+    copyPendingBoard();
+  }, [pendingBoardCopyId, loading]);
 
   const fetchUserProfile = async () => {
     try {
@@ -106,7 +151,8 @@ export default function DashboardPage({ onLogout, user: initialUser, onProfile, 
       
       const data = await response.json();
       console.log('Fetched boards data:', data);
-      setBoards(data);
+      const cleanedBoards = await Promise.all(data.map(removeGeneratedCopySuffix));
+      setBoards(cleanedBoards);
     } catch (error) {
       console.error('Error fetching boards:', error);
     } finally {
@@ -199,6 +245,31 @@ export default function DashboardPage({ onLogout, user: initialUser, onProfile, 
     }
   };
 
+  const handleLeaveBoard = async (boardToLeave) => {
+    if (!boardToLeave) return;
+    setLeavingBoard(true);
+    setLeaveBoardError('');
+    try {
+      const response = await apiFetch(`/api/boards/${encodeURIComponent(boardToLeave._id)}/leave`, { method: 'DELETE' });
+      const result = await response.json().catch(() => ({}));
+      if (!response.ok) {
+        const apiMessage = result.error || result.message;
+        if (response.status === 404 && (apiMessage === 'Not Found' || /route .* not found/i.test(result.message || ''))) {
+          throw new Error('The API server has not loaded the leave-board route yet. Restart or redeploy the server, then try again.');
+        }
+        throw new Error(apiMessage || 'Could not leave this board. Please try again.');
+      }
+      setBoards((current) => current.filter((board) => board._id !== boardToLeave._id));
+      setSelectedBoardId(null);
+      setLeaveBoardTarget(null);
+      window.showToast?.(`You left “${boardToLeave.title}”.`, 'success');
+    } catch (error) {
+      setLeaveBoardError(error.message || 'Could not leave this board.');
+    } finally {
+      setLeavingBoard(false);
+    }
+  };
+
   const handleSaveBoardTitle = async (board) => {
     const title = boardTitleDraft.trim();
     if (!title) {
@@ -215,7 +286,7 @@ export default function DashboardPage({ onLogout, user: initialUser, onProfile, 
       });
       const result = await response.json().catch(() => ({}));
       if (!response.ok) throw new Error(result.error || 'Could not update this board.');
-      setBoards((current) => current.map((item) => item._id === board._id ? result : item));
+      setBoards((current) => current.map((item) => item._id === board._id ? { ...result, ownerName: result.ownerName || item.ownerName } : item));
       setEditingBoardTitle(false);
     } catch (error) {
       setBoardActionError(error.message || 'Could not update this board.');
@@ -302,7 +373,7 @@ export default function DashboardPage({ onLogout, user: initialUser, onProfile, 
       }
 
       setBoards(currentBoards => currentBoards.map((board, i) =>
-        i === addLinkModal.boardIdx ? result : board
+        i === addLinkModal.boardIdx ? { ...result, ownerName: result.ownerName || board.ownerName } : board
       ));
       setAddLinkModal({ open: false, boardIdx: null, linkIdx: null });
       setNewLinkTitle("");
@@ -336,7 +407,7 @@ export default function DashboardPage({ onLogout, user: initialUser, onProfile, 
       if (response.ok) {
         const updatedBoard = await response.json();
         setBoards(boards => boards.map((board, i) => 
-          i === boardIdx ? updatedBoard : board
+          i === boardIdx ? { ...updatedBoard, ownerName: updatedBoard.ownerName || board.ownerName } : board
         ));
       }
     } catch (error) {
@@ -362,7 +433,7 @@ export default function DashboardPage({ onLogout, user: initialUser, onProfile, 
       if (response.ok) {
         const updatedBoard = await response.json();
         setBoards(boards => boards.map((board, i) => 
-          i === boardIdx ? updatedBoard : board
+          i === boardIdx ? { ...updatedBoard, ownerName: updatedBoard.ownerName || board.ownerName } : board
         ));
       }
     } catch (error) {
@@ -387,7 +458,7 @@ export default function DashboardPage({ onLogout, user: initialUser, onProfile, 
       if (response.ok) {
         const updatedBoard = await response.json();
         setBoards(boards => boards.map((board, i) => 
-          i === boardIdx ? updatedBoard : board
+          i === boardIdx ? { ...updatedBoard, ownerName: updatedBoard.ownerName || board.ownerName } : board
         ));
       } else {
         const errorText = await response.text();
@@ -447,26 +518,42 @@ export default function DashboardPage({ onLogout, user: initialUser, onProfile, 
     }
   };
 
-  const handleCreateInvite = async () => {
+  const handleCreateInvite = async (sendEmail = false) => {
     if (!inviteBoard || !inviteEmail.trim()) return;
     setCreatingInvite(true);
+    setInviteMode(sendEmail ? 'email' : 'link');
     setInviteError("");
+    setInviteNotice(null);
     setInviteLink("");
     try {
       const response = await apiFetch(`/api/boards/${inviteBoard._id}/invites`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email: inviteEmail }),
+        body: JSON.stringify({ email: inviteEmail, sendEmail }),
       });
       const result = await response.json().catch(() => ({}));
       if (!response.ok) throw new Error(result.error || `Could not create invite (HTTP ${response.status})`);
-      const url = new URL(window.location.pathname, window.location.origin);
+      const url = new URL('/invite', window.location.origin);
       url.searchParams.set('invite', result.token);
       setInviteLink(url.toString());
+      setInviteNotice({ message: result.emailMessage || 'Invitation link created.', success: result.emailSent === true || !sendEmail });
     } catch (error) {
       setInviteError(error.message || 'Could not create invite. Try again.');
     } finally {
       setCreatingInvite(false);
+      setInviteMode(null);
+    }
+  };
+
+  const handleCopyInviteLink = async () => {
+    try {
+      await navigator.clipboard.writeText(inviteLink);
+      setInviteNotice({ message: 'Invitation link copied.', success: true });
+    } catch {
+      const input = document.getElementById('invite-link');
+      input?.focus();
+      input?.select();
+      setInviteNotice({ message: 'Select and copy the invitation link.', success: false });
     }
   };
 
@@ -574,16 +661,27 @@ export default function DashboardPage({ onLogout, user: initialUser, onProfile, 
         ) : (
         <main className="flex-1 flex flex-col items-center justify-start px-2 sm:px-6">
           <div className="w-full h-[calc(100vh-120px)] sm:h-[calc(100vh-115px)] max-h-full sm:max-h-[900px] flex flex-col justify-start items-center p-1 sm:p-8 pt-4 overflow-y-auto">
-          <div className="w-full max-w-3xl mb-5">
+          <div className="w-full max-w-3xl mb-5 flex items-center justify-center gap-3">
             <label className="sr-only" htmlFor="board-link-search">Search boards and links</label>
             <input
               id="board-link-search"
               type="search"
-              className="input input-bordered w-full bg-white"
-              placeholder="Search boards, links, notes, and tags..."
+              className="input input-bordered min-w-0 flex-1 bg-white"
+              placeholder="Search boards, links, and tags..."
               value={searchQuery}
               onChange={(event) => setSearchQuery(event.target.value)}
             />
+            <button
+              className="btn btn-primary flex shrink-0 items-center gap-2"
+              onClick={() => {
+                setModalOpen(true);
+                setNewBoardTemplateId('blank');
+                setNewBoardTitle('');
+                setCreateBoardError('');
+              }}
+            >
+              Add Board <span className="text-xl">+</span>
+            </button>
           </div>
           {/* Boards List */}
                       <Masonry
@@ -603,6 +701,7 @@ export default function DashboardPage({ onLogout, user: initialUser, onProfile, 
                 <LinkCard
                   category={board.title}
                   links={board.links || []}
+                  userEmail={!board.isOwner ? board.ownerName : undefined}
                   searchQuery={searchQuery}
                   isOwner={board.isOwner === true}
                   onOpen={() => {
@@ -625,18 +724,7 @@ export default function DashboardPage({ onLogout, user: initialUser, onProfile, 
             ))}
           </Masonry>
           {normalizedSearch && visibleBoards.length === 0 && <p className="text-gray-600 py-8">No boards or links matched “{searchQuery}”.</p>}
-          {/* Add Board Button */}
-          <button
-            className="btn btn-primary mt-auto self-end flex items-center gap-2"
-            onClick={() => {
-              setModalOpen(true);
-              setNewBoardTemplateId('blank');
-              setNewBoardTitle('');
-              setCreateBoardError('');
-            }}
-          >
-            Add Board <span className="text-xl">＋</span>
-          </button>
+
         </div>
         {selectedBoard && (
           <div
@@ -670,6 +758,9 @@ export default function DashboardPage({ onLogout, user: initialUser, onProfile, 
                     <h2 id="selected-board-title" className="text-2xl font-bold text-blue-700 break-words">{selectedBoard.title}</h2>
                   )}
                   <p className="text-sm text-gray-500 mt-1">{selectedBoard.links?.length || 0} saved {(selectedBoard.links?.length || 0) === 1 ? 'link' : 'links'}</p>
+                  {!selectedBoard.isOwner && selectedBoard.ownerName && (
+                    <p className="text-sm text-gray-500 mt-1">Owned by <span className="font-medium text-gray-700">{selectedBoard.ownerName}</span></p>
+                  )}
                 </div>
                 <div className="flex items-center gap-2 shrink-0">
                   {selectedBoard.isOwner && !editingBoardTitle && (
@@ -682,6 +773,7 @@ export default function DashboardPage({ onLogout, user: initialUser, onProfile, 
                           setInviteEmail('');
                           setInviteLink('');
                           setInviteError('');
+                          setInviteNotice(null);
                         }}
                       >Invite</button>
                       <button
@@ -707,6 +799,16 @@ export default function DashboardPage({ onLogout, user: initialUser, onProfile, 
                         </svg>
                       </button>
                     </>
+                  )}
+                  {!selectedBoard.isOwner && (
+                    <button
+                      type="button"
+                      className="btn btn-outline btn-sm border-red-200 text-red-700 hover:border-red-300 hover:bg-red-50"
+                      onClick={() => { setLeaveBoardTarget(selectedBoard); setLeaveBoardError(''); }}
+                      title="Leave shared board"
+                    >
+                      Leave board
+                    </button>
                   )}
                   <button className="btn btn-circle btn-ghost btn-sm" onClick={() => setSelectedBoardId(null)} aria-label="Close board">✕</button>
                 </div>
@@ -760,6 +862,33 @@ export default function DashboardPage({ onLogout, user: initialUser, onProfile, 
                 <button className="btn btn-ghost" onClick={() => setBoardDeleteTarget(null)} disabled={deletingBoard}>Cancel</button>
                 <button className="btn btn-error" onClick={() => handleDeleteBoard(boardDeleteTarget)} disabled={deletingBoard}>
                   {deletingBoard ? 'Deleting…' : 'Delete board'}
+                </button>
+              </div>
+            </section>
+          </div>
+        )}
+        {leaveBoardTarget && (
+          <div
+            className="fixed inset-0 z-[60] flex items-center justify-center bg-black/45 backdrop-blur-sm p-4"
+            onClick={() => { if (!leavingBoard) setLeaveBoardTarget(null); }}
+          >
+            <section
+              role="alertdialog"
+              aria-modal="true"
+              aria-labelledby="leave-board-title"
+              aria-describedby="leave-board-description"
+              className="w-full max-w-md rounded-2xl bg-white p-6 shadow-2xl"
+              onClick={(event) => event.stopPropagation()}
+            >
+              <h2 id="leave-board-title" className="text-lg font-bold text-gray-900">Leave this shared board?</h2>
+              <p id="leave-board-description" className="mt-2 text-sm text-gray-600">
+                You will lose access to <span className="font-semibold text-gray-800">{leaveBoardTarget.title}</span>. The board and its links will remain available to the owner and other collaborators.
+              </p>
+              {leaveBoardError && <p className="mt-3 text-sm text-red-600" role="alert">{leaveBoardError}</p>}
+              <div className="mt-5 flex justify-end gap-2">
+                <button className="btn btn-ghost" onClick={() => setLeaveBoardTarget(null)} disabled={leavingBoard}>Cancel</button>
+                <button className="btn btn-error" onClick={() => handleLeaveBoard(leaveBoardTarget)} disabled={leavingBoard}>
+                  {leavingBoard ? 'Leaving...' : 'Leave board'}
                 </button>
               </div>
             </section>
@@ -914,28 +1043,67 @@ export default function DashboardPage({ onLogout, user: initialUser, onProfile, 
         )}
         {inviteBoard && (
           <div className="fixed inset-0 flex items-center justify-center bg-black/20 backdrop-blur-sm z-50">
-            <div className="bg-white rounded-lg p-6 shadow-lg flex flex-col gap-4 w-full max-w-md mx-4">
+            <div className="bg-white rounded-lg p-6 shadow-lg flex flex-col gap-4 w-full max-w-md mx-4 relative">
+              <button
+                type="button"
+                className="btn btn-ghost btn-sm btn-circle absolute right-3 top-3"
+                onClick={() => setInviteBoard(null)}
+                aria-label="Close share dialog"
+                title="Close"
+              >
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true">
+                  <path d="m6 6 12 12M18 6 6 18" />
+                </svg>
+              </button>
               <h2 className="text-lg font-bold">Share “{inviteBoard.title}”</h2>
-              <p className="text-sm text-gray-600">Invite someone by email. They must sign in with that same email. The invite link expires in 7 days.</p>
+              <p className="text-sm text-gray-600">Invited by <strong>{userProfile?.displayName || user?.displayName || user?.email || 'You'}</strong>.</p>
+              <p className="text-sm text-gray-600">Send an invitation email or create a link to share yourself. The invite is for the email address below and expires in 7 days.</p>
               <label htmlFor="invite-email" className="text-sm font-medium">Email address</label>
-              <div className="flex gap-2">
-                <input
-                  id="invite-email"
-                  type="email"
-                  className="input input-bordered flex-1"
-                  placeholder="person@example.com"
-                  value={inviteEmail}
-                  onChange={(event) => setInviteEmail(event.target.value)}
-                />
-                <button className="btn btn-primary" onClick={handleCreateInvite} disabled={creatingInvite || !inviteEmail.trim()}>
-                  {creatingInvite ? 'Creating...' : 'Create invite'}
+              <input
+                id="invite-email"
+                type="email"
+                className="input input-bordered w-full"
+                placeholder="person@example.com"
+                value={inviteEmail}
+                onChange={(event) => setInviteEmail(event.target.value)}
+              />
+              <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+                <button className="btn btn-primary" onClick={() => handleCreateInvite(true)} disabled={creatingInvite || !inviteEmail.trim()}>
+                  {creatingInvite && inviteMode === 'email' ? 'Sending...' : 'Send invite email'}
+                </button>
+                <button className="btn btn-outline" onClick={() => handleCreateInvite(false)} disabled={creatingInvite || !inviteEmail.trim()}>
+                  {creatingInvite && inviteMode === 'link' ? 'Creating...' : 'Create invite link'}
                 </button>
               </div>
+              {inviteNotice && (
+                <p className={`rounded-lg px-3 py-2 text-sm ${inviteNotice.success ? 'bg-green-50 text-green-800' : 'bg-amber-50 text-amber-900'}`} role="status">
+                  {inviteNotice.message}
+                </p>
+              )}
               {inviteLink && (
                 <div className="flex flex-col gap-2">
-                  <label htmlFor="invite-link" className="text-sm font-medium">Copy and send this one-time link</label>
-                  <input id="invite-link" className="input input-bordered w-full text-xs" readOnly value={inviteLink} onFocus={(event) => event.target.select()} />
-                  <button className="btn btn-sm btn-outline self-end" onClick={() => navigator.clipboard?.writeText(inviteLink)}>Copy invite link</button>
+                  <div className="relative">
+                    <input
+                      id="invite-link"
+                      aria-label="Invitation link"
+                      className="input input-bordered w-full pr-12 text-xs"
+                      readOnly
+                      value={inviteLink}
+                      onFocus={(event) => event.target.select()}
+                    />
+                    <button
+                      type="button"
+                      className="btn btn-ghost btn-sm btn-circle absolute right-1 top-1/2 -translate-y-1/2"
+                      onClick={handleCopyInviteLink}
+                      aria-label="Copy invite link"
+                      title="Copy invite link"
+                    >
+                      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" aria-hidden="true">
+                        <rect x="8" y="8" width="12" height="12" rx="2" />
+                        <path d="M16 8V6a2 2 0 0 0-2-2H6a2 2 0 0 0-2 2v8a2 2 0 0 0 2 2h2" />
+                      </svg>
+                    </button>
+                  </div>
                 </div>
               )}
               {inviteBoard.members?.length > 0 && (
@@ -952,9 +1120,6 @@ export default function DashboardPage({ onLogout, user: initialUser, onProfile, 
                 </div>
               )}
               {inviteError && <p className="text-sm text-red-600" role="alert">{inviteError}</p>}
-              <div className="flex justify-end">
-                <button className="btn btn-ghost" onClick={() => setInviteBoard(null)}>Close</button>
-              </div>
             </div>
           </div>
         )}

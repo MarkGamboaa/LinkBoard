@@ -1,9 +1,9 @@
 import React, { useState } from "react";
-import { createUserWithEmailAndPassword, updateProfile } from "firebase/auth";
+import { createUserWithEmailAndPassword, sendEmailVerification, updateProfile } from "firebase/auth";
 import { auth, validatePassword, updateUserProfile } from "./firebase";
 import LinkBoardLogo from "./assets/linkboardlogo.svg";
 
-export default function SignupPage({ onBack, onLogin }) {
+export default function SignupPage({ onBack, onLogin, continueWithBoardCopy = false }) {
   const [firstName, setFirstName] = useState("");
   const [lastName, setLastName] = useState("");
   const [email, setEmail] = useState("");
@@ -28,6 +28,13 @@ export default function SignupPage({ onBack, onLogin }) {
 
     try {
       const userCredential = await createUserWithEmailAndPassword(auth, email, password);
+      let verificationMessage = "Account created. Check your inbox and verify your email to accept shared board invitations.";
+      try {
+        await sendEmailVerification(userCredential.user);
+      } catch (verificationError) {
+        console.warn('Could not send the email verification message:', verificationError);
+        verificationMessage = "Account created, but the verification email could not be sent. You can request another from an invitation page.";
+      }
       
       // Save both first and last name in displayName
       await updateProfile(userCredential.user, { displayName: `${firstName} ${lastName}`.trim() });
@@ -38,11 +45,11 @@ export default function SignupPage({ onBack, onLogin }) {
         console.error('Failed to save profile:', profileResult.message);
       }
       
-      setSuccess("Account created! Redirecting to login...");
+      setSuccess(verificationMessage);
       setFirstName(""); setLastName(""); setEmail(""); setPassword("");
-      setTimeout(() => {
-        if (onLogin) onLogin();
-      }, 1000);
+      // Firebase signs the new user in as part of account creation. The app's
+      // auth listener redirects them to their dashboard, where pending actions
+      // such as copying a public board can finish.
     } catch (err) {
       setError(err.message);
     } finally {
@@ -78,6 +85,7 @@ export default function SignupPage({ onBack, onLogin }) {
               <h2 className="text-xl sm:text-2xl font-bold">Create an account</h2>
               <button className="underline text-sm" onClick={onLogin}>log in instead</button>
             </div>
+            {continueWithBoardCopy && <p className="-mt-4 mb-4 text-sm text-gray-600">Create your account and we’ll add that public board to your private boards.</p>}
             <form className="flex flex-col gap-4" onSubmit={handleSubmit}>
               <input type="text" placeholder="First name" className="input input-bordered w-full input-enhanced enhanced-focus" value={firstName} onChange={e => setFirstName(e.target.value)} />
               <input type="text" placeholder="Last name" className="input input-bordered w-full input-enhanced enhanced-focus" value={lastName} onChange={e => setLastName(e.target.value)} />

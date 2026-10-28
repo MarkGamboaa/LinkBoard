@@ -49,7 +49,11 @@ app.addHook('onRequest', async (request, reply) => {
 
   try {
     const decodedToken = await getAuth(firebaseApp).verifyIdToken(authorization.slice(7));
-    request.user = { uid: decodedToken.uid, email: decodedToken.email || null };
+    request.user = {
+      uid: decodedToken.uid,
+      email: decodedToken.email || null,
+      emailVerified: decodedToken.email_verified === true,
+    };
   } catch (error) {
     request.log.warn({ err: error }, 'Firebase token verification failed');
     return reply.code(401).send({ error: 'Invalid or expired sign-in token' });
@@ -79,6 +83,61 @@ function safeMetadataUrl(value) {
     return ['http:', 'https:'].includes(url.protocol) ? url.toString() : null;
   } catch {
     return null;
+  }
+}
+
+function escapeHtml(value) {
+  return String(value).replace(/[&<>"']/g, (character) => ({
+    '&': '&amp;',
+    '<': '&lt;',
+    '>': '&gt;',
+    '"': '&quot;',
+    "'": '&#39;',
+  })[character]);
+}
+
+async function sendBoardInviteEmail({ email, ownerName, boardTitle, inviteUrl, expiresAt }) {
+  const apiKey = process.env.RESEND_API_KEY;
+  const from = process.env.INVITE_EMAIL_FROM;
+  if (!apiKey || !from) {
+    return { sent: false, message: 'Email delivery is not configured. Copy the invitation link instead.' };
+  }
+
+  const safeOwnerName = escapeHtml(ownerName);
+  const safeBoardTitle = escapeHtml(boardTitle);
+  const safeInviteUrl = escapeHtml(inviteUrl);
+  const safeEmail = escapeHtml(email);
+  const cleanSubject = `${ownerName} invited you to ${boardTitle} on LinkBoard`.replace(/[\r\n]+/g, ' ');
+  const expirationText = new Date(expiresAt).toLocaleString('en-US', {
+    dateStyle: 'medium',
+    timeStyle: 'short',
+    timeZone: 'UTC',
+  });
+
+  try {
+    const response = await fetch('https://api.resend.com/emails', {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${apiKey}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        from,
+        to: [email],
+        subject: cleanSubject,
+        html: `<div style="font-family:Arial,sans-serif;max-width:560px;margin:0 auto;color:#1f2937"><h1 style="color:#4338ca">LinkBoard invitation</h1><p><strong>${safeOwnerName}</strong> invited you to collaborate on <strong>${safeBoardTitle}</strong>.</p><p><a href="${safeInviteUrl}" style="display:inline-block;background:#4338ca;color:#fff;padding:12px 18px;border-radius:8px;text-decoration:none">Open invitation</a></p><p>This invitation is for ${safeEmail}. Sign in to LinkBoard with this same email to join. The link expires ${escapeHtml(expirationText)}.</p></div>`,
+        text: `${ownerName} invited you to collaborate on ${boardTitle} in LinkBoard. Open this invitation: ${inviteUrl}\n\nThis invitation is for ${email}. Sign in with this same email to join. It expires ${expirationText} (UTC).`,
+      }),
+      signal: AbortSignal.timeout(10000),
+    });
+
+    if (!response.ok) {
+      return { sent: false, message: 'The invite was created, but the email provider could not send it. Copy the invitation link instead.' };
+    }
+    return { sent: true, message: `Invitation email sent to ${email}.` };
+  } catch (error) {
+    app.log.warn({ err: error }, 'Board invite email could not be sent');
+    return { sent: false, message: 'The invite was created, but email delivery failed. Copy the invitation link instead.' };
   }
 }
 
@@ -115,6 +174,19 @@ app.get('/api/health', async (_request, reply) => {
 });
 
 app.get('/api/boards', async (request) => {
+  // Copies created by earlier versions were given a " (copy)" suffix.
+  // Remove that generated suffix for this user's existing copied boards too.
+  const legacyCopies = await prisma.board.findMany({
+    where: { ownerUid: request.user.uid, title: { endsWith: ' (copy)' } },
+    select: { id: true, title: true },
+  });
+  if (legacyCopies.length) {
+    await prisma.$transaction(legacyCopies.map((board) => prisma.board.update({
+      where: { id: board.id },
+      data: { title: board.title.slice(0, -7) },
+    })));
+  }
+
   const boards = await prisma.board.findMany({
     where: {
       OR: [
@@ -128,7 +200,15 @@ app.get('/api/boards', async (request) => {
     },
     orderBy: [{ sortOrder: 'asc' }, { createdAt: 'asc' }],
   });
-  return boards.map((board) => serializeBoard(board, request.user.uid));
+  const ownerProfiles = await prisma.userProfile.findMany({
+    where: { firebaseUid: { in: [...new Set(boards.map((board) => board.ownerUid))] } },
+    select: { firebaseUid: true, displayName: true },
+  });
+  const ownerNames = new Map(ownerProfiles.map((profile) => [profile.firebaseUid, profile.displayName?.trim()]));
+  return boards.map((board) => ({
+    ...serializeBoard(board, request.user.uid),
+    ownerName: ownerNames.get(board.ownerUid) || board.ownerEmail || 'Board owner',
+  }));
 });
 
 app.get('/api/boards/public', async () => {
@@ -138,6 +218,42 @@ app.get('/api/boards/public', async () => {
     orderBy: { createdAt: 'desc' },
   });
   return boards.map((board) => serializeBoard(board));
+});
+
+app.post('/api/boards/:id/copy', async (request, reply) => {
+  const sourceBoard = await prisma.board.findFirst({
+    where: { id: request.params.id, isPublic: true },
+    include: { links: { orderBy: { position: 'asc' } } },
+  });
+  if (!sourceBoard) return reply.code(404).send({ error: 'This public board is no longer available' });
+
+  const copiedBoard = await prisma.board.create({
+    data: {
+      title: sourceBoard.title,
+      ownerUid: request.user.uid,
+      ownerEmail: request.user.email,
+      isPublic: false,
+      links: {
+        create: sourceBoard.links.map((link) => ({
+          title: link.title,
+          url: link.url,
+          color: link.color,
+          position: link.position,
+          tags: link.tags,
+          note: link.note,
+          siteTitle: link.siteTitle,
+          description: link.description,
+          previewImageUrl: link.previewImageUrl,
+          faviconUrl: link.faviconUrl,
+        })),
+      },
+    },
+    include: {
+      links: { orderBy: { position: 'asc' } },
+      members: { select: { userUid: true, email: true, createdAt: true } },
+    },
+  });
+  return reply.code(201).send(serializeBoard(copiedBoard, request.user.uid));
 });
 
 app.post('/api/boards', async (request, reply) => {
@@ -210,6 +326,18 @@ app.delete('/api/boards/:id', async (request, reply) => {
   return { success: true };
 });
 
+app.delete('/api/boards/:id/leave', async (request, reply) => {
+  const membership = await prisma.boardMember.findUnique({
+    where: { boardId_userUid: { boardId: request.params.id, userUid: request.user.uid } },
+    select: { boardId: true },
+  });
+  if (!membership) return reply.code(404).send({ error: 'Board membership not found' });
+  await prisma.boardMember.delete({
+    where: { boardId_userUid: { boardId: request.params.id, userUid: request.user.uid } },
+  });
+  return { success: true };
+});
+
 app.post('/api/boards/:id/invites', async (request, reply) => {
   const board = await prisma.board.findUnique({ where: { id: request.params.id } });
   if (!board || board.ownerUid !== request.user.uid) {
@@ -230,22 +358,62 @@ app.post('/api/boards/:id/invites', async (request, reply) => {
   const token = randomBytes(32).toString('base64url');
   const tokenHash = createHash('sha256').update(token).digest('hex');
   const expiresAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000);
+  const ownerProfile = await prisma.userProfile.findUnique({
+    where: { firebaseUid: request.user.uid },
+    select: { displayName: true },
+  });
+  const ownerName = ownerProfile?.displayName?.trim() || request.user.email || 'A LinkBoard user';
   await prisma.boardInvite.create({
     data: { boardId: board.id, email, tokenHash, invitedByUid: request.user.uid, expiresAt },
   });
-  return reply.code(201).send({ token, expiresAt, boardTitle: board.title });
+
+  let emailResult = { sent: false, message: 'Invitation link created.' };
+  if (request.body?.sendEmail === true) {
+    try {
+      const appUrl = process.env.APP_URL || process.env.CORS_ORIGIN?.split(',')[0]?.trim() || 'http://localhost:5173';
+      const inviteUrl = new URL('/invite', appUrl);
+      inviteUrl.searchParams.set('invite', token);
+      emailResult = await sendBoardInviteEmail({
+        email,
+        ownerName,
+        boardTitle: board.title,
+        inviteUrl: inviteUrl.toString(),
+        expiresAt,
+      });
+    } catch (error) {
+      app.log.warn({ err: error }, 'Board invite email URL could not be created');
+      emailResult = { sent: false, message: 'The invite was created, but its email could not be sent. Copy the invitation link instead.' };
+    }
+  }
+
+  return reply.code(201).send({
+    token,
+    expiresAt,
+    boardTitle: board.title,
+    ownerName,
+    emailSent: emailResult.sent,
+    emailMessage: emailResult.message,
+  });
 });
 
 app.get('/api/invites/:token', async (request, reply) => {
   const tokenHash = createHash('sha256').update(request.params.token).digest('hex');
   const invite = await prisma.boardInvite.findUnique({
     where: { tokenHash },
-    include: { board: { select: { title: true } } },
+    include: { board: { select: { title: true, ownerUid: true, ownerEmail: true } } },
   });
   if (!invite || invite.acceptedAt || invite.expiresAt <= new Date()) {
     return reply.code(404).send({ error: 'This invite is invalid, expired, or already used' });
   }
-  return { boardTitle: invite.board.title, expiresAt: invite.expiresAt };
+  const ownerProfile = await prisma.userProfile.findUnique({
+    where: { firebaseUid: invite.board.ownerUid },
+    select: { displayName: true },
+  });
+  return {
+    boardTitle: invite.board.title,
+    ownerName: ownerProfile?.displayName?.trim() || invite.board.ownerEmail || 'Board owner',
+    expiresAt: invite.expiresAt,
+  };
 });
 
 app.post('/api/invites/:token/accept', async (request, reply) => {
@@ -258,6 +426,9 @@ app.post('/api/invites/:token/accept', async (request, reply) => {
   const userEmail = String(request.user.email || '').trim().toLowerCase();
   if (!userEmail || userEmail !== invite.email) {
     return reply.code(403).send({ error: 'Sign in with the email address this invite was sent to' });
+  }
+  if (!request.user.emailVerified) {
+    return reply.code(403).send({ error: 'Verify your email address before joining this shared board' });
   }
 
   await prisma.$transaction([
