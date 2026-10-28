@@ -25,7 +25,7 @@ export default function PublicBoardPage({ onLogin, onSignup, onBackToDashboard, 
   const fetchPublicBoards = async () => {
     try {
       console.log('Fetching public boards...');
-      const response = await fetch(`${import.meta.env.VITE_API_URL || 'http://localhost:3001'}/api/boards/public`);
+      const response = await fetch(`${import.meta.env.VITE_API_URL || 'http://127.0.0.1:3001'}/api/boards/public`);
       console.log('Fetch public boards response status:', response.status);
       
       if (!response.ok) {
@@ -166,4 +166,4 @@ export default function PublicBoardPage({ onLogin, onSignup, onBackToDashboard, 
       </div>
     </div>
   );
-} 
+}

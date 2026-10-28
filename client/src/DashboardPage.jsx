@@ -4,6 +4,18 @@ import Masonry from "react-masonry-css";
 import LoadingSpinner from "./components/LoadingSpinner.jsx";
 import ProfilePage from "./ProfilePage.jsx";
 import { apiFetch, getUserProfile } from "./firebase";
+import { BOARD_TEMPLATES } from "./data/boardTemplates";
+import { fetchLinkPreview } from "./utils/linkPreview";
+
+const getTemplateLinkTextColor = (color) => {
+  const hex = String(color || '#181f29').replace('#', '');
+  if (!/^[0-9a-f]{6}$/i.test(hex)) return '#ffffff';
+  const red = parseInt(hex.slice(0, 2), 16);
+  const green = parseInt(hex.slice(2, 4), 16);
+  const blue = parseInt(hex.slice(4, 6), 16);
+  const brightness = (red * 299 + green * 587 + blue * 114) / 1000;
+  return brightness < 128 ? '#ffffff' : '#111827';
+};
 
 export default function DashboardPage({ onLogout, user: initialUser, onProfile, onPublic }) {
   const [user, setUser] = useState(initialUser);
@@ -12,16 +24,37 @@ export default function DashboardPage({ onLogout, user: initialUser, onProfile, 
   const [boards, setBoards] = useState([]);
   const [modalOpen, setModalOpen] = useState(false);
   const [newBoardTitle, setNewBoardTitle] = useState("");
-  const [addLinkModal, setAddLinkModal] = useState({ open: false, boardIdx: null });
+  const [newBoardTemplateId, setNewBoardTemplateId] = useState('blank');
+  const [createBoardError, setCreateBoardError] = useState("");
+  const [creatingBoard, setCreatingBoard] = useState(false);
+  const [addLinkModal, setAddLinkModal] = useState({ open: false, boardIdx: null, linkIdx: null });
   const [newLinkTitle, setNewLinkTitle] = useState("");
   const [newLinkUrl, setNewLinkUrl] = useState("");
   const [newLinkColor, setNewLinkColor] = useState("#181f29");
+  const [newLinkTags, setNewLinkTags] = useState("");
+  const [newLinkNote, setNewLinkNote] = useState("");
+  const [addLinkError, setAddLinkError] = useState("");
+  const [savingLink, setSavingLink] = useState(false);
+  const [searchQuery, setSearchQuery] = useState("");
+  const [inviteBoard, setInviteBoard] = useState(null);
+  const [inviteEmail, setInviteEmail] = useState("");
+  const [inviteLink, setInviteLink] = useState("");
+  const [inviteError, setInviteError] = useState("");
+  const [creatingInvite, setCreatingInvite] = useState(false);
   const [loading, setLoading] = useState(true);
   const [logoutLoading, setLogoutLoading] = useState(false);
   const [addingLinkLoading, setAddingLinkLoading] = useState(false);
   const [deletingLinkLoading, setDeletingLinkLoading] = useState(false);
   const [draggedBoardIndex, setDraggedBoardIndex] = useState(null);
   const [slidingBoards, setSlidingBoards] = useState(new Set());
+  const [selectedBoardId, setSelectedBoardId] = useState(null);
+  const [editingBoardTitle, setEditingBoardTitle] = useState(false);
+  const [boardTitleDraft, setBoardTitleDraft] = useState('');
+  const [savingBoard, setSavingBoard] = useState(false);
+  const [boardActionError, setBoardActionError] = useState('');
+  const [boardDeleteTarget, setBoardDeleteTarget] = useState(null);
+  const [boardDeleteError, setBoardDeleteError] = useState('');
+  const [deletingBoard, setDeletingBoard] = useState(false);
 
   // Dynamically set columns based on number of boards
   const maxCols = 4;
@@ -146,71 +179,141 @@ export default function DashboardPage({ onLogout, user: initialUser, onProfile, 
   };
 
   // Delete board handler
-  const handleDeleteBoard = async (idx) => {
+  const handleDeleteBoard = async (boardToDelete) => {
+    if (!boardToDelete) return;
+    setDeletingBoard(true);
+    setBoardDeleteError('');
     try {
-      const boardToDelete = boards[idx];
-              await apiFetch(`/api/boards/${boardToDelete._id}`, {
+      const response = await apiFetch(`/api/boards/${boardToDelete._id}`, {
         method: 'DELETE'
       });
-      setBoards(boards => boards.filter((_, i) => i !== idx));
+      if (!response.ok) throw new Error('Could not delete this board. Please try again.');
+      setBoards((current) => current.filter((board) => board._id !== boardToDelete._id));
+      setSelectedBoardId(null);
+      setBoardDeleteTarget(null);
     } catch (error) {
       console.error('Error deleting board:', error);
+      setBoardDeleteError(error.message || 'Could not delete this board.');
+    } finally {
+      setDeletingBoard(false);
+    }
+  };
+
+  const handleSaveBoardTitle = async (board) => {
+    const title = boardTitleDraft.trim();
+    if (!title) {
+      setBoardActionError('Enter a board name.');
+      return;
+    }
+    setSavingBoard(true);
+    setBoardActionError('');
+    try {
+      const response = await apiFetch(`/api/boards/${board._id}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ title }),
+      });
+      const result = await response.json().catch(() => ({}));
+      if (!response.ok) throw new Error(result.error || 'Could not update this board.');
+      setBoards((current) => current.map((item) => item._id === board._id ? result : item));
+      setEditingBoardTitle(false);
+    } catch (error) {
+      setBoardActionError(error.message || 'Could not update this board.');
+    } finally {
+      setSavingBoard(false);
     }
   };
 
   // Add link handler
   const handleAddLink = (idx) => {
-    setAddLinkModal({ open: true, boardIdx: idx });
+    setAddLinkModal({ open: true, boardIdx: idx, linkIdx: null });
     setNewLinkTitle("");
     setNewLinkUrl("");
     setNewLinkColor("#181f29");
-    setAddingLinkLoading(true);
+    setNewLinkTags("");
+    setNewLinkNote("");
+    setAddLinkError("");
+  };
+
+  const handleEditLink = (boardIdx, linkIdx) => {
+    const link = boards[boardIdx]?.links?.[linkIdx];
+    if (!link) return;
+    setAddLinkModal({ open: true, boardIdx, linkIdx });
+    setNewLinkTitle(link.title || "");
+    setNewLinkUrl(link.url || "");
+    setNewLinkColor(link.color || "#181f29");
+    setNewLinkTags((link.tags || []).join(', '));
+    setNewLinkNote(link.note || "");
+    setAddLinkError("");
   };
 
   // Confirm add link
   const handleConfirmAddLink = async () => {
-    if (!newLinkTitle.trim() || !newLinkUrl.trim()) return;
-    
+    if (!newLinkTitle.trim() || !newLinkUrl.trim()) {
+      setAddLinkError("Enter both a link title and URL.");
+      return;
+    }
+
+    setSavingLink(true);
+    setAddingLinkLoading(true);
+    setAddLinkError("");
     try {
-      console.log('Creating board with title:', newLinkTitle);
       let url = newLinkUrl.trim();
       if (!/^https?:\/\//i.test(url)) {
         url = 'https://' + url;
       }
 
       const boardToUpdate = boards[addLinkModal.boardIdx];
-      const updatedLinks = [...(boardToUpdate.links || []), { title: newLinkTitle, url, color: newLinkColor }];
-      
-      const updateData = { ...boardToUpdate, links: updatedLinks };
-      console.log('Sending board update data:', updateData);
+      if (!boardToUpdate) throw new Error('Could not find this board. Refresh the page and try again.');
+      const links = [...(boardToUpdate.links || [])];
+      const previousLink = addLinkModal.linkIdx === null ? null : links[addLinkModal.linkIdx];
+      const preview = previousLink?.url === url ? {} : await fetchLinkPreview(url);
+      const tags = [...new Set(newLinkTags.split(',').map((tag) => tag.trim().toLowerCase()).filter(Boolean))];
+      const updatedLink = {
+        ...(previousLink || {}),
+        title: newLinkTitle.trim(),
+        url,
+        color: newLinkColor,
+        tags,
+        note: newLinkNote.trim(),
+        ...(preview.siteTitle ? preview : previousLink?.url === url ? {} : preview),
+      };
+      if (addLinkModal.linkIdx === null) links.push(updatedLink);
+      else links[addLinkModal.linkIdx] = updatedLink;
       
       const response = await apiFetch(`/api/boards/${boardToUpdate._id}`, {
         method: 'PUT',
         headers: {
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify(updateData)
+        body: JSON.stringify({ links })
       });
 
-      console.log('Response status:', response.status);
-      
-      if (response.ok) {
-        const updatedBoard = await response.json();
-        console.log('Created board:', updatedBoard);
-        setBoards(boards => boards.map((board, i) => 
-          i === addLinkModal.boardIdx ? updatedBoard : board
-        ));
-      } else {
-        const errorText = await response.text();
-        console.error('Error response:', errorText);
+      const result = await response.json().catch(() => ({}));
+      if (!response.ok) {
+        throw new Error(result.error || `Could not add link (HTTP ${response.status})`);
       }
-    } catch (error) {
-      console.error('Error adding link:', error);
-    } finally {
-      setAddLinkModal({ open: false, boardIdx: null });
+
+      const savedLink = result.links?.[addLinkModal.linkIdx === null ? result.links.length - 1 : addLinkModal.linkIdx];
+      const savedTags = Array.isArray(savedLink?.tags) ? savedLink.tags : [];
+      const savedNote = typeof savedLink?.note === 'string' ? savedLink.note.trim() : '';
+      if (!savedLink || JSON.stringify(savedTags) !== JSON.stringify(tags) || savedNote !== newLinkNote.trim()) {
+        throw new Error('The API did not return the saved tags and note. Restart the server, then try saving again.');
+      }
+
+      setBoards(currentBoards => currentBoards.map((board, i) =>
+        i === addLinkModal.boardIdx ? result : board
+      ));
+      setAddLinkModal({ open: false, boardIdx: null, linkIdx: null });
       setNewLinkTitle("");
       setNewLinkUrl("");
-      setNewLinkColor("#181f29");
+      setNewLinkTags("");
+      setNewLinkNote("");
+    } catch (error) {
+      console.error('Error adding link:', error);
+      setAddLinkError(error.message || 'Could not add link. Check your connection and try again.');
+    } finally {
+      setSavingLink(false);
       setAddingLinkLoading(false);
     }
   };
@@ -227,7 +330,7 @@ export default function DashboardPage({ onLogout, user: initialUser, onProfile, 
         headers: {
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify({ ...boardToUpdate, links: updatedLinks })
+        body: JSON.stringify({ links: updatedLinks })
       });
 
       if (response.ok) {
@@ -253,7 +356,7 @@ export default function DashboardPage({ onLogout, user: initialUser, onProfile, 
         headers: {
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify({ ...boardToUpdate, links: newLinks })
+        body: JSON.stringify({ links: newLinks })
       });
 
       if (response.ok) {
@@ -309,14 +412,15 @@ export default function DashboardPage({ onLogout, user: initialUser, onProfile, 
   // Add board handler
   const handleAddBoard = async () => {
     if (!newBoardTitle.trim()) return;
-    
+
+    setCreatingBoard(true);
+    setCreateBoardError("");
     try {
-      console.log('Creating board with title:', newBoardTitle);
+      const template = BOARD_TEMPLATES.find((item) => item.id === newBoardTemplateId) || BOARD_TEMPLATES[0];
       const boardData = { 
-        title: newBoardTitle, 
-        links: [],
+        title: newBoardTitle.trim(),
+        links: template.links,
       };
-      console.log('Sending board data:', boardData);
       
       const response = await apiFetch('/api/boards', {
         method: 'POST',
@@ -326,22 +430,78 @@ export default function DashboardPage({ onLogout, user: initialUser, onProfile, 
         body: JSON.stringify(boardData)
       });
 
-      console.log('Response status:', response.status);
-      
-      if (response.ok) {
-        const newBoard = await response.json();
-        console.log('Created board:', newBoard);
-        setBoards([...boards, newBoard]);
-        setNewBoardTitle("");
-        setModalOpen(false);
-      } else {
-        const errorText = await response.text();
-        console.error('Error response:', errorText);
+      const result = await response.json().catch(() => ({}));
+      if (!response.ok) {
+        throw new Error(result.error || `Could not create board (HTTP ${response.status})`);
       }
+
+      setBoards(currentBoards => [...currentBoards, result]);
+      setNewBoardTitle("");
+      setNewBoardTemplateId('blank');
+      setModalOpen(false);
     } catch (error) {
       console.error('Error adding board:', error);
+      setCreateBoardError(error.message || 'Could not create board. Check your connection and try again.');
+    } finally {
+      setCreatingBoard(false);
     }
   };
+
+  const handleCreateInvite = async () => {
+    if (!inviteBoard || !inviteEmail.trim()) return;
+    setCreatingInvite(true);
+    setInviteError("");
+    setInviteLink("");
+    try {
+      const response = await apiFetch(`/api/boards/${inviteBoard._id}/invites`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email: inviteEmail }),
+      });
+      const result = await response.json().catch(() => ({}));
+      if (!response.ok) throw new Error(result.error || `Could not create invite (HTTP ${response.status})`);
+      const url = new URL(window.location.pathname, window.location.origin);
+      url.searchParams.set('invite', result.token);
+      setInviteLink(url.toString());
+    } catch (error) {
+      setInviteError(error.message || 'Could not create invite. Try again.');
+    } finally {
+      setCreatingInvite(false);
+    }
+  };
+
+  const handleRemoveMember = async (board, member) => {
+    if (!window.confirm(`Remove ${member.email} from “${board.title}”?`)) return;
+    try {
+      const response = await apiFetch(`/api/boards/${board._id}/members/${encodeURIComponent(member.userUid)}`, { method: 'DELETE' });
+      const result = await response.json().catch(() => ({}));
+      if (!response.ok) throw new Error(result.error || `Could not remove member (HTTP ${response.status})`);
+      setBoards((current) => current.map((item) => item._id === board._id
+        ? { ...item, members: (item.members || []).filter((entry) => entry.userUid !== member.userUid) }
+        : item));
+      setInviteBoard((current) => current?._id === board._id
+        ? { ...current, members: (current.members || []).filter((entry) => entry.userUid !== member.userUid) }
+        : current);
+    } catch (error) {
+      setInviteError(error.message || 'Could not remove this collaborator.');
+    }
+  };
+
+  const normalizedSearch = searchQuery.trim().toLowerCase();
+  const visibleBoards = boards.map((board, index) => ({ board, index })).filter(({ board }) => {
+    if (!normalizedSearch || board.title.toLowerCase().includes(normalizedSearch)) return true;
+    return (board.links || []).some((link) => [
+      link.title,
+      link.siteTitle,
+      link.description,
+      link.url,
+      link.note,
+      ...(link.tags || []),
+    ].some((value) => String(value || '').toLowerCase().includes(normalizedSearch)));
+  });
+  const selectedBoard = boards.find((board) => board._id === selectedBoardId) || null;
+  const selectedBoardIndex = selectedBoard ? boards.findIndex((board) => board._id === selectedBoard._id) : -1;
+  const selectedBoardTemplate = BOARD_TEMPLATES.find((item) => item.id === newBoardTemplateId) || BOARD_TEMPLATES[0];
 
   if (loading) {
     return <LoadingSpinner fullScreen text="Loading your boards..." />;
@@ -413,65 +573,265 @@ export default function DashboardPage({ onLogout, user: initialUser, onProfile, 
           <ProfilePage user={user} onBack={() => setUser(u => ({ ...u, showProfile: false }))} onUserUpdate={setUser} />
         ) : (
         <main className="flex-1 flex flex-col items-center justify-start px-2 sm:px-6">
-          <div className="bg-white bg-opacity-60 rounded-xl sm:rounded-2xl shadow-xl w-full h-[calc(100vh-120px)] sm:h-[calc(100vh-115px)] max-h-full sm:max-h-[900px] flex flex-col justify-start items-center p-1 sm:p-8 pt-4 overflow-y-auto">
+          <div className="w-full h-[calc(100vh-120px)] sm:h-[calc(100vh-115px)] max-h-full sm:max-h-[900px] flex flex-col justify-start items-center p-1 sm:p-8 pt-4 overflow-y-auto">
+          <div className="w-full max-w-3xl mb-5">
+            <label className="sr-only" htmlFor="board-link-search">Search boards and links</label>
+            <input
+              id="board-link-search"
+              type="search"
+              className="input input-bordered w-full bg-white"
+              placeholder="Search boards, links, notes, and tags..."
+              value={searchQuery}
+              onChange={(event) => setSearchQuery(event.target.value)}
+            />
+          </div>
           {/* Boards List */}
                       <Masonry
               breakpointCols={breakpointColumnsObj}
               className="my-masonry-grid w-full mb-4 overflow-y-auto overflow-x-hidden"
               columnClassName="my-masonry-grid_column"
             >
-            {boards.map((board, idx) => (
+            {visibleBoards.map(({ board, index: idx }) => (
               <div
                 key={board._id || idx}
-                draggable
-                onDragStart={(e) => handleBoardDragStart(e, idx)}
-                onDragOver={handleBoardDragOver}
-                onDrop={(e) => handleBoardDrop(e, idx)}
+                draggable={!normalizedSearch && board.isOwner === true}
+                onDragStart={!normalizedSearch && board.isOwner === true ? (e) => handleBoardDragStart(e, idx) : undefined}
+                onDragOver={!normalizedSearch && board.isOwner === true ? handleBoardDragOver : undefined}
+                onDrop={!normalizedSearch && board.isOwner === true ? (e) => handleBoardDrop(e, idx) : undefined}
                 className={`draggable-board relative ${draggedBoardIndex === idx ? 'dragging' : ''} ${slidingBoards.has(idx) ? 'sliding' : ''}`}
               >
                 <LinkCard
                   category={board.title}
                   links={board.links || []}
-                  onDelete={() => handleDeleteBoard(idx)}
+                  searchQuery={searchQuery}
+                  isOwner={board.isOwner === true}
+                  onOpen={() => {
+                    setSelectedBoardId(board._id);
+                    setEditingBoardTitle(false);
+                    setBoardTitleDraft(board.title);
+                    setBoardActionError('');
+                  }}
                   onAddLink={() => handleAddLink(idx)}
+                  onEditLink={(linkIdx) => handleEditLink(idx, linkIdx)}
                   onDeleteLink={linkIdx => handleDeleteLink(idx, linkIdx)}
                   onReorderLinks={(newLinks) => handleReorderLinks(idx, newLinks)}
                   isAddingLink={addingLinkLoading && addLinkModal.boardIdx === idx}
                   isDeletingLink={deletingLinkLoading}
                   isPublic={board.isPublic || false}
-                  onTogglePublic={() => handleTogglePublic(idx)}
+                  onTogglePublic={board.isOwner === false ? null : () => handleTogglePublic(idx)}
                   isReadOnly={false}
                 />
               </div>
             ))}
           </Masonry>
+          {normalizedSearch && visibleBoards.length === 0 && <p className="text-gray-600 py-8">No boards or links matched “{searchQuery}”.</p>}
           {/* Add Board Button */}
           <button
             className="btn btn-primary mt-auto self-end flex items-center gap-2"
-            onClick={() => setModalOpen(true)}
+            onClick={() => {
+              setModalOpen(true);
+              setNewBoardTemplateId('blank');
+              setNewBoardTitle('');
+              setCreateBoardError('');
+            }}
           >
             Add Board <span className="text-xl">＋</span>
           </button>
         </div>
+        {selectedBoard && (
+          <div
+            className="fixed inset-0 z-40 flex items-center justify-center bg-black/35 backdrop-blur-sm p-3 sm:p-6"
+            onClick={() => { setSelectedBoardId(null); setEditingBoardTitle(false); }}
+          >
+            <section
+              role="dialog"
+              aria-modal="true"
+              aria-labelledby="selected-board-title"
+              className="bg-white rounded-2xl shadow-2xl w-full max-w-3xl max-h-[90vh] overflow-y-auto p-4 sm:p-6"
+              onClick={(event) => event.stopPropagation()}
+            >
+              <div className="flex items-start justify-between gap-3 mb-4">
+                <div className="flex-1 min-w-0">
+                  {editingBoardTitle ? (
+                    <div className="flex flex-wrap gap-2">
+                      <input
+                        id="selected-board-title"
+                        className="input input-bordered flex-1 min-w-[180px]"
+                        value={boardTitleDraft}
+                        onChange={(event) => setBoardTitleDraft(event.target.value)}
+                        autoFocus
+                      />
+                      <button className="btn btn-primary btn-sm" onClick={() => handleSaveBoardTitle(selectedBoard)} disabled={savingBoard}>
+                        {savingBoard ? 'Saving…' : 'Save'}
+                      </button>
+                      <button className="btn btn-ghost btn-sm" onClick={() => { setEditingBoardTitle(false); setBoardTitleDraft(selectedBoard.title); }}>Cancel</button>
+                    </div>
+                  ) : (
+                    <h2 id="selected-board-title" className="text-2xl font-bold text-blue-700 break-words">{selectedBoard.title}</h2>
+                  )}
+                  <p className="text-sm text-gray-500 mt-1">{selectedBoard.links?.length || 0} saved {(selectedBoard.links?.length || 0) === 1 ? 'link' : 'links'}</p>
+                </div>
+                <div className="flex items-center gap-2 shrink-0">
+                  {selectedBoard.isOwner && !editingBoardTitle && (
+                    <>
+                      <button
+                        type="button"
+                        className="btn btn-ghost btn-sm"
+                        onClick={() => {
+                          setInviteBoard(selectedBoard);
+                          setInviteEmail('');
+                          setInviteLink('');
+                          setInviteError('');
+                        }}
+                      >Invite</button>
+                      <button
+                        type="button"
+                        className="btn btn-ghost btn-square btn-sm text-gray-700"
+                        onClick={() => { setBoardTitleDraft(selectedBoard.title); setEditingBoardTitle(true); setBoardActionError(''); }}
+                        aria-label="Edit board name"
+                        title="Edit board name"
+                      >
+                        <svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" className="w-5 h-5">
+                          <path strokeLinecap="round" strokeLinejoin="round" d="m16.862 4.487 2.65 2.65M4 20l4.2-.9L19.5 7.8a1.875 1.875 0 0 0-2.65-2.65L5.55 16.45 4 20Z" />
+                        </svg>
+                      </button>
+                      <button
+                        type="button"
+                        className="btn btn-ghost btn-square btn-sm text-red-600 hover:bg-red-50"
+                        onClick={() => { setBoardDeleteTarget(selectedBoard); setBoardDeleteError(''); }}
+                        aria-label="Delete board"
+                        title="Delete board"
+                      >
+                        <svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" className="w-5 h-5">
+                          <path strokeLinecap="round" strokeLinejoin="round" d="M4 7h16M10 11v6m4-6v6M5.5 7l.8 13h11.4l.8-13M9 7V4h6v3" />
+                        </svg>
+                      </button>
+                    </>
+                  )}
+                  <button className="btn btn-circle btn-ghost btn-sm" onClick={() => setSelectedBoardId(null)} aria-label="Close board">✕</button>
+                </div>
+              </div>
+              {boardActionError && <p className="text-sm text-red-600 mb-3" role="alert">{boardActionError}</p>}
+              <LinkCard
+                category={selectedBoard.title}
+                links={selectedBoard.links || []}
+                expanded
+                hideHeader
+                isOwner={selectedBoard.isOwner === true}
+                isReadOnly={false}
+                onAddLink={() => handleAddLink(selectedBoardIndex)}
+                onEditLink={(linkIdx) => handleEditLink(selectedBoardIndex, linkIdx)}
+                onDeleteLink={(linkIdx) => handleDeleteLink(selectedBoardIndex, linkIdx)}
+                onReorderLinks={(newLinks) => handleReorderLinks(selectedBoardIndex, newLinks)}
+                isAddingLink={addingLinkLoading && addLinkModal.boardIdx === selectedBoardIndex}
+                isDeletingLink={deletingLinkLoading}
+              />
+            </section>
+          </div>
+        )}
+        {boardDeleteTarget && (
+          <div
+            className="fixed inset-0 z-[60] flex items-center justify-center bg-black/45 backdrop-blur-sm p-4"
+            onClick={() => { if (!deletingBoard) setBoardDeleteTarget(null); }}
+          >
+            <section
+              role="alertdialog"
+              aria-modal="true"
+              aria-labelledby="delete-board-title"
+              aria-describedby="delete-board-description"
+              className="w-full max-w-md rounded-2xl bg-white p-6 shadow-2xl"
+              onClick={(event) => event.stopPropagation()}
+            >
+              <div className="mb-4 flex items-start gap-3">
+                <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-red-50 text-red-600">
+                  <svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" className="h-5 w-5">
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M12 8v4m0 4h.01M10.3 3.9 2.8 17a2 2 0 0 0 1.7 3h15a2 2 0 0 0 1.7-3l-7.5-13.1a2 2 0 0 0-3.4 0Z" />
+                  </svg>
+                </div>
+                <div>
+                  <h2 id="delete-board-title" className="text-lg font-bold text-gray-900">Delete this board?</h2>
+                  <p id="delete-board-description" className="mt-1 text-sm text-gray-600">
+                    <span className="font-semibold text-gray-800">{boardDeleteTarget.title}</span> and its {boardDeleteTarget.links?.length || 0} {(boardDeleteTarget.links?.length || 0) === 1 ? 'link' : 'links'} will be permanently deleted.
+                  </p>
+                </div>
+              </div>
+              {boardDeleteError && <p className="mb-3 text-sm text-red-600" role="alert">{boardDeleteError}</p>}
+              <div className="flex justify-end gap-2">
+                <button className="btn btn-ghost" onClick={() => setBoardDeleteTarget(null)} disabled={deletingBoard}>Cancel</button>
+                <button className="btn btn-error" onClick={() => handleDeleteBoard(boardDeleteTarget)} disabled={deletingBoard}>
+                  {deletingBoard ? 'Deleting…' : 'Delete board'}
+                </button>
+              </div>
+            </section>
+          </div>
+        )}
         {/* Modal for new board */}
         {modalOpen && (
-          <div className="fixed inset-0 flex items-center justify-center bg-black/20 backdrop-blur-sm z-50">
-            <div className="bg-white rounded-lg p-6 shadow-lg flex flex-col gap-4 min-w-[300px]">
+          <div className="fixed inset-0 flex items-center justify-center bg-black/20 backdrop-blur-sm z-50 p-4">
+            <div className="bg-white rounded-lg p-6 shadow-lg flex flex-col gap-4 w-full max-w-md max-h-[90vh] overflow-y-auto">
               <h2 className="text-lg font-bold">Create New Board</h2>
+              <div>
+                <label htmlFor="board-template" className="text-sm font-medium">Start from a template</label>
+                <select
+                  id="board-template"
+                  className="select select-bordered w-full mt-1"
+                  value={newBoardTemplateId}
+                  onChange={(event) => {
+                    const template = BOARD_TEMPLATES.find((item) => item.id === event.target.value) || BOARD_TEMPLATES[0];
+                    setNewBoardTemplateId(template.id);
+                    setNewBoardTitle(template.id === 'blank' ? '' : template.title);
+                    setCreateBoardError('');
+                  }}
+                >
+                  {BOARD_TEMPLATES.map((template) => <option key={template.id} value={template.id}>{template.title}</option>)}
+                </select>
+                <p className="text-xs text-gray-500 mt-1">{selectedBoardTemplate.description}</p>
+              </div>
+              <div className="rounded-xl border border-gray-200 bg-gray-50 p-3" aria-label={`${selectedBoardTemplate.title} template preview`}>
+                <p className="mb-2 text-[11px] font-semibold uppercase tracking-wide text-gray-500">Preview</p>
+                <div className="rounded-lg bg-white p-3 shadow-sm">
+                  <h3 className="mb-2 truncate text-sm font-bold text-blue-700">
+                    {newBoardTitle.trim() || (newBoardTemplateId === 'blank' ? 'Your board' : selectedBoardTemplate.title)}
+                  </h3>
+                  {selectedBoardTemplate.links.length ? (
+                    <div className="flex flex-col gap-2">
+                      {selectedBoardTemplate.links.map((link) => (
+                        <div
+                          key={link.url}
+                          className="min-w-0 rounded-md px-2.5 py-2"
+                          style={{ background: link.color || '#181f29', color: getTemplateLinkTextColor(link.color) }}
+                        >
+                          <p className="truncate text-xs font-semibold">{link.title}</p>
+                          <p className="truncate text-[10px] opacity-90">{link.url}</p>
+                        </div>
+                      ))}
+                    </div>
+                  ) : (
+                    <p className="rounded-md border border-dashed border-gray-300 px-3 py-4 text-center text-xs text-gray-400">Your links will appear here</p>
+                  )}
+                </div>
+              </div>
               <input
-                className="input input-bordered bg-white/60 backdrop-blur placeholder:text-gray-500"
+                className="input input-bordered bg-white/60 backdrop-blur placeholder:text-gray-500 w-full"
                 placeholder="Board Title"
                 value={newBoardTitle}
-                onChange={e => setNewBoardTitle(e.target.value)}
+                onChange={e => {
+                  setNewBoardTitle(e.target.value);
+                  setCreateBoardError("");
+                }}
                 autoFocus
               />
+              {createBoardError && (
+                <p className="text-sm text-red-600" role="alert">{createBoardError}</p>
+              )}
               <div className="flex gap-2 justify-end">
-                <button className="btn btn-ghost" onClick={() => setModalOpen(false)}>Cancel</button>
+                <button className="btn btn-ghost" onClick={() => setModalOpen(false)} disabled={creatingBoard}>Cancel</button>
                 <button
                   className="btn btn-primary"
                   onClick={handleAddBoard}
+                  disabled={creatingBoard || !newBoardTitle.trim()}
                 >
-                  Create
+                  {creatingBoard ? 'Creating...' : 'Create'}
                 </button>
               </div>
             </div>
@@ -479,21 +839,52 @@ export default function DashboardPage({ onLogout, user: initialUser, onProfile, 
         )}
         {/* Modal for adding a link */}
         {addLinkModal.open && (
-          <div className="fixed inset-0 flex items-center justify-center bg-black/20 backdrop-blur-sm z-50">
-            <div className="bg-white rounded-lg p-6 shadow-lg flex flex-col gap-4 min-w-[300px]">
-              <h2 className="text-lg font-bold">Add Link</h2>
+          <div className="fixed inset-0 flex items-center justify-center bg-black/20 backdrop-blur-sm z-50 p-4">
+            <div className="bg-white rounded-lg p-6 shadow-lg flex flex-col gap-4 w-full max-w-lg">
+              <h2 className="text-lg font-bold">{addLinkModal.linkIdx === null ? 'Add Link' : 'Edit Link'}</h2>
               <input
-                className="input input-bordered bg-white/60 backdrop-blur placeholder:text-gray-500"
+                className="input input-bordered bg-white/60 backdrop-blur placeholder:text-gray-500 w-full"
                 placeholder="Link Title"
                 value={newLinkTitle}
-                onChange={e => setNewLinkTitle(e.target.value)}
+                onChange={e => {
+                  setNewLinkTitle(e.target.value);
+                  setAddLinkError("");
+                }}
                 autoFocus
               />
+              <label className="flex w-full flex-col gap-1 text-sm font-medium">
+                Tags <span className="font-normal text-gray-500">(optional, separated by commas)</span>
+                <input
+                  className="input input-bordered bg-white/60 backdrop-blur placeholder:text-gray-500 font-normal w-full"
+                  placeholder="e.g. learning, frontend"
+                  value={newLinkTags}
+                  onChange={e => {
+                    setNewLinkTags(e.target.value);
+                    setAddLinkError("");
+                  }}
+                />
+              </label>
+              <label className="flex w-full flex-col gap-1 text-sm font-medium">
+                Description or note <span className="font-normal text-gray-500">(optional)</span>
+                <textarea
+                  className="textarea textarea-bordered bg-white/60 backdrop-blur placeholder:text-gray-500 font-normal w-full"
+                  placeholder="Why are you saving this link?"
+                  value={newLinkNote}
+                  onChange={e => {
+                    setNewLinkNote(e.target.value);
+                    setAddLinkError("");
+                  }}
+                  rows={2}
+                />
+              </label>
               <input
-                className="input input-bordered bg-white/60 backdrop-blur placeholder:text-gray-500"
+                className="input input-bordered bg-white/60 backdrop-blur placeholder:text-gray-500 w-full"
                 placeholder="URL (www.example.com)"
                 value={newLinkUrl}
-                onChange={e => setNewLinkUrl(e.target.value)}
+                onChange={e => {
+                  setNewLinkUrl(e.target.value);
+                  setAddLinkError("");
+                }}
               />
               <div className="flex flex-col gap-2">
                 <label className="font-medium text-sm">Pick Link Color:</label>
@@ -505,14 +896,64 @@ export default function DashboardPage({ onLogout, user: initialUser, onProfile, 
                   style={{ background: 'none' }}
                 />
               </div>
+              {addLinkError && (
+                <p className="text-sm text-red-600" role="alert">{addLinkError}</p>
+              )}
               <div className="flex gap-2 justify-end">
-                <button className="btn btn-ghost" onClick={() => setAddLinkModal({ open: false, boardIdx: null })}>Cancel</button>
+                <button className="btn btn-ghost" onClick={() => setAddLinkModal({ open: false, boardIdx: null, linkIdx: null })} disabled={savingLink}>Cancel</button>
                 <button
                   className="btn btn-primary"
                   onClick={handleConfirmAddLink}
+                  disabled={savingLink || !newLinkTitle.trim() || !newLinkUrl.trim()}
                 >
-                  Add
+                  {savingLink ? 'Saving...' : addLinkModal.linkIdx === null ? 'Add' : 'Save'}
                 </button>
+              </div>
+            </div>
+          </div>
+        )}
+        {inviteBoard && (
+          <div className="fixed inset-0 flex items-center justify-center bg-black/20 backdrop-blur-sm z-50">
+            <div className="bg-white rounded-lg p-6 shadow-lg flex flex-col gap-4 w-full max-w-md mx-4">
+              <h2 className="text-lg font-bold">Share “{inviteBoard.title}”</h2>
+              <p className="text-sm text-gray-600">Invite someone by email. They must sign in with that same email. The invite link expires in 7 days.</p>
+              <label htmlFor="invite-email" className="text-sm font-medium">Email address</label>
+              <div className="flex gap-2">
+                <input
+                  id="invite-email"
+                  type="email"
+                  className="input input-bordered flex-1"
+                  placeholder="person@example.com"
+                  value={inviteEmail}
+                  onChange={(event) => setInviteEmail(event.target.value)}
+                />
+                <button className="btn btn-primary" onClick={handleCreateInvite} disabled={creatingInvite || !inviteEmail.trim()}>
+                  {creatingInvite ? 'Creating...' : 'Create invite'}
+                </button>
+              </div>
+              {inviteLink && (
+                <div className="flex flex-col gap-2">
+                  <label htmlFor="invite-link" className="text-sm font-medium">Copy and send this one-time link</label>
+                  <input id="invite-link" className="input input-bordered w-full text-xs" readOnly value={inviteLink} onFocus={(event) => event.target.select()} />
+                  <button className="btn btn-sm btn-outline self-end" onClick={() => navigator.clipboard?.writeText(inviteLink)}>Copy invite link</button>
+                </div>
+              )}
+              {inviteBoard.members?.length > 0 && (
+                <div>
+                  <h3 className="text-sm font-semibold mb-2">Collaborators</h3>
+                  <ul className="flex flex-col gap-2">
+                    {inviteBoard.members.map((member) => (
+                      <li key={member.userUid} className="flex items-center justify-between text-sm">
+                        <span>{member.email}</span>
+                        <button className="text-red-600 hover:underline" onClick={() => handleRemoveMember(inviteBoard, member)}>Remove</button>
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              )}
+              {inviteError && <p className="text-sm text-red-600" role="alert">{inviteError}</p>}
+              <div className="flex justify-end">
+                <button className="btn btn-ghost" onClick={() => setInviteBoard(null)}>Close</button>
               </div>
             </div>
           </div>

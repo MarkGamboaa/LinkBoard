@@ -8,26 +8,99 @@ import LoginPage from './LoginPage.jsx';
 import DashboardPage from './DashboardPage.jsx';
 import ProfilePage from './ProfilePage.jsx';
 import PublicBoardPage from './PublicBoardPage.jsx';
+import BoardInvitePage from './BoardInvitePage.jsx';
 import LoadingSpinner from './components/LoadingSpinner.jsx';
 import ToastContainer from './components/ToastContainer.jsx';
 import { auth } from './firebase';
 import { onAuthStateChanged } from 'firebase/auth';
 
+const routeByPath = {
+  '/': 'landing',
+  '/signup': 'signup',
+  '/login': 'login',
+  '/dashboard': 'dashboard',
+  '/profile': 'profile',
+  '/public': 'public',
+  '/invite': 'invite',
+};
+
+const getPageFromLocation = () => {
+  const inviteToken = new URLSearchParams(window.location.search).get('invite');
+  if (inviteToken) return 'invite';
+  return routeByPath[window.location.pathname.replace(/\/$/, '') || '/'] || 'landing';
+};
+
+const getPathForPage = (page, inviteToken = null) => {
+  const paths = {
+    landing: '/',
+    signup: '/signup',
+    login: '/login',
+    dashboard: '/dashboard',
+    profile: '/profile',
+    public: '/public',
+    invite: '/invite',
+  };
+  const path = paths[page] || '/';
+  return page === 'invite' && inviteToken
+    ? `${path}?invite=${encodeURIComponent(inviteToken)}`
+    : path;
+};
+
 function App() {
-  const [page, setPage] = useState('landing');
+  const [inviteToken, setInviteToken] = useState(() => new URLSearchParams(window.location.search).get('invite'));
+  const [page, setPageState] = useState(getPageFromLocation);
   const [user, setUser] = useState(null);
   const [loading, setLoading] = useState(true);
+
+  const navigate = (nextPage, { replace = false } = {}) => {
+    const currentDepth = window.history.state?.linkBoardRoute ? (window.history.state.routeDepth || 0) : 0;
+    const routeDepth = replace ? currentDepth : currentDepth + 1;
+    const nextState = { linkBoardRoute: true, routeDepth, page: nextPage };
+    const method = replace ? 'replaceState' : 'pushState';
+    window.history[method](nextState, '', getPathForPage(nextPage, inviteToken));
+    setPageState(nextPage);
+  };
+
+  const goBack = (fallbackPage) => {
+    if (window.history.state?.linkBoardRoute && (window.history.state.routeDepth || 0) > 0) {
+      window.history.back();
+    } else {
+      navigate(fallbackPage, { replace: true });
+    }
+  };
+
+  useEffect(() => {
+    const currentPage = getPageFromLocation();
+    if (!window.history.state?.linkBoardRoute) {
+      window.history.replaceState(
+        { linkBoardRoute: true, routeDepth: 0, page: currentPage },
+        '',
+        window.location.href,
+      );
+    }
+
+    const handlePopState = () => {
+      setInviteToken(new URLSearchParams(window.location.search).get('invite'));
+      setPageState(getPageFromLocation());
+    };
+    window.addEventListener('popstate', handlePopState);
+    return () => window.removeEventListener('popstate', handlePopState);
+  }, []);
 
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, (firebaseUser) => {
       setUser(firebaseUser);
       setLoading(false);
+      const currentPage = getPageFromLocation();
       if (firebaseUser) {
-        setPage('dashboard');
+        const nextPage = inviteToken ? 'invite' : ['landing', 'login', 'signup'].includes(currentPage) ? 'dashboard' : currentPage;
+        if (nextPage !== currentPage) navigate(nextPage, { replace: true });
+      } else if (['dashboard', 'profile'].includes(currentPage)) {
+        navigate('landing', { replace: true });
       }
     });
     return () => unsubscribe();
-  }, []);
+  }, [inviteToken]);
 
   if (loading) {
     return <LoadingSpinner fullScreen text="Initializing..." />;
@@ -37,11 +110,31 @@ function App() {
     try {
       await auth.signOut();
       setUser(null);
-      setPage('landing');
+      navigate('landing', { replace: true });
     } catch (error) {
       console.error('Error during logout:', error);
     }
   };
+
+  if (page === 'invite' && inviteToken) {
+    return (
+      <BoardInvitePage
+        token={inviteToken}
+        user={user}
+        onLogin={() => navigate('login')}
+        onSignup={() => navigate('signup')}
+        onSwitchAccount={async () => {
+          await auth.signOut();
+          setUser(null);
+          navigate('invite', { replace: true });
+        }}
+        onAccepted={() => {
+          setInviteToken(null);
+          navigate('dashboard', { replace: true });
+        }}
+      />
+    );
+  }
 
   if (page === 'dashboard' && user) {
     return (
@@ -49,8 +142,8 @@ function App() {
         <DashboardPage 
           user={user} 
           onLogout={handleLogout}
-          onProfile={() => setPage('profile')}
-          onPublic={() => setPage('public')}
+          onProfile={() => navigate('profile')}
+          onPublic={() => navigate('public')}
         />
         <ToastContainer />
       </>
@@ -61,7 +154,7 @@ function App() {
       <>
         <ProfilePage 
           user={user} 
-          onBack={() => setPage('dashboard')}
+          onBack={() => goBack('dashboard')}
           onLogout={handleLogout}
           onUserUpdate={(updatedUser) => {
             console.log('Main App - onUserUpdate called with:', updatedUser);
@@ -77,9 +170,9 @@ function App() {
     return (
       <>
         <PublicBoardPage 
-          onLogin={() => setPage('login')} 
-          onSignup={() => setPage('signup')} 
-          onBackToDashboard={() => setPage('dashboard')}
+          onLogin={() => navigate('login')} 
+          onSignup={() => navigate('signup')} 
+          onBackToDashboard={() => goBack(user ? 'dashboard' : 'landing')}
           isLoggedIn={!!user}
         />
         <ToastContainer />
@@ -89,7 +182,7 @@ function App() {
   if (page === 'signup') {
     return (
       <>
-        <SignupPage onBack={() => setPage('landing')} onLogin={() => setPage('login')} />
+        <SignupPage onBack={() => goBack('landing')} onLogin={() => navigate('login')} />
         <ToastContainer />
       </>
     );
@@ -97,14 +190,14 @@ function App() {
   if (page === 'login') {
     return (
       <>
-        <LoginPage onBack={() => setPage('landing')} onSignup={() => setPage('signup')} onLogin={user => { setUser(user); setPage('dashboard'); }} />
+        <LoginPage onBack={() => goBack('landing')} onSignup={() => navigate('signup')} onLogin={user => { setUser(user); navigate(inviteToken ? 'invite' : 'dashboard'); }} />
         <ToastContainer />
       </>
     );
   }
   return (
     <>
-      <LandingPage onSignup={() => setPage('signup')} onLogin={() => setPage('login')} onPublic={() => setPage('public')} />
+      <LandingPage onSignup={() => navigate('signup')} onLogin={() => navigate('login')} onPublic={() => navigate('public')} />
       <ToastContainer />
     </>
   );

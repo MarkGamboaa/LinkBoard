@@ -17,6 +17,34 @@ body {
   font-family: var(--font-logo);
 }
 
+.link-list-scroll {
+  scrollbar-width: thin;
+  scrollbar-color: #e5e7eb transparent;
+}
+
+.link-list-scroll::-webkit-scrollbar {
+  width: 6px;
+}
+
+.link-list-scroll::-webkit-scrollbar-button {
+  display: none;
+  width: 0;
+  height: 0;
+}
+
+.link-list-scroll::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.link-list-scroll::-webkit-scrollbar-thumb {
+  background: #e5e7eb;
+  border-radius: 9999px;
+}
+
+.link-list-scroll::-webkit-scrollbar-thumb:hover {
+  background: #d1d5db;
+}
+
 .my-masonry-grid {
   display: flex;
   margin-left: -16px; /* gutter size offset */

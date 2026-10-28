@@ -1,4 +1,5 @@
 import React, { useState } from "react";
+import { getFaviconUrl } from "./utils/linkPreview";
 
 export default function LinkCard({
   category = "UI/UX",
@@ -7,6 +8,12 @@ export default function LinkCard({
   onAddLink,
   onDeleteLink,
   onReorderLinks,
+  onEditLink,
+  onOpen,
+  expanded = false,
+  hideHeader = false,
+  searchQuery = "",
+  isOwner = false,
   isAddingLink = false,
   isDeletingLink = false,
   isPublic = false,
@@ -20,6 +27,18 @@ export default function LinkCard({
   // 3 links: 3*64 = 192px, 2 gaps: 2*16 = 32px, total = 224px
   // Add a little extra for padding/borders if needed
   const maxLinkAreaHeight = 224;
+  const normalizedQuery = searchQuery.trim().toLowerCase();
+  const boardMatches = normalizedQuery && category.toLowerCase().includes(normalizedQuery);
+  const visibleLinks = (Array.isArray(links) ? links : [])
+    .map((link, index) => ({ link, index }))
+    .filter(({ link }) => !normalizedQuery || boardMatches || [
+      link.title,
+      link.siteTitle,
+      link.description,
+      link.url,
+      link.note,
+      ...(link.tags || []),
+    ].some((value) => String(value || "").toLowerCase().includes(normalizedQuery)));
 
   // Function to determine if a color is dark or light
   const isColorDark = (color) => {
@@ -47,20 +66,12 @@ export default function LinkCard({
     return true;
   };
 
-  // Function to get delete button styling based on background color
-  const getDeleteButtonStyle = (backgroundColor) => {
-    const isDark = isColorDark(backgroundColor);
-    return isDark 
-      ? "text-white hover:text-gray-300" 
-      : "text-black hover:text-gray-700";
-  };
-
   // Function to get link styling based on background color
   const getLinkStyle = (backgroundColor) => {
     const isDark = isColorDark(backgroundColor);
     return isDark 
       ? "text-white" 
-      : "text-black border border-gray-300";
+      : "text-black";
   };
 
   // Link drag and drop handlers
@@ -115,18 +126,25 @@ export default function LinkCard({
   };
 
   return (
-    <div className="bg-white rounded-xl shadow-lg p-4 w-80 flex flex-col items-center relative card-hover card-enter">
+    <div
+      className={`${expanded ? 'w-full p-0' : 'bg-white rounded-xl shadow-lg p-4 w-80 card-hover card-enter'} flex flex-col items-center relative ${onOpen && !expanded ? 'cursor-pointer' : ''}`}
+      onClick={(event) => {
+        if (onOpen && !expanded && !event.target.closest('a, button')) onOpen();
+      }}
+    >
       {/* Category and Delete */}
-      <div className="w-full flex justify-between items-center mb-4">
+      {!hideHeader && <div className="w-full flex justify-between items-center mb-4">
         <div className="flex flex-col">
-          <span className="text-blue-700 font-bold text-lg">{category}</span>
+          {onOpen && !expanded ? (
+            <button type="button" onClick={onOpen} className="text-blue-700 font-bold text-lg text-left hover:underline">{category}</button>
+          ) : <span className="text-blue-700 font-bold text-lg">{category}</span>}
           {userEmail && (
             <span className="text-xs text-gray-500 mt-1">by {userEmail}</span>
           )}
         </div>
         <div className="flex items-center gap-2">
           {/* Public/Private Toggle */}
-          {!isReadOnly && onTogglePublic && (
+          {!isReadOnly && isOwner && onTogglePublic && (
             <button
               onClick={(e) => {
                 console.log('Toggle button clicked!', { isPublic, category });
@@ -144,51 +162,85 @@ export default function LinkCard({
               {isPublic ? 'Public' : 'Private'}
             </button>
           )}
-          {/* Delete Button */}
-          {!isReadOnly && (
-            <button onClick={onDelete} className="text-red-500 hover:text-red-700 text-xl font-bold" title="Delete Board">
-              &#10005;
-            </button>
-          )}
         </div>
-      </div>
+      </div>}
       {/* Links List */}
-      {Array.isArray(links) && links.length > 0 && (
+      {visibleLinks.length > 0 && (
         <div
-          className={`flex flex-col gap-4 w-full mb-8 ${links.length > 3 ? 'overflow-y-auto' : ''}`}
-          style={links.length > 3 ? { maxHeight: maxLinkAreaHeight } : {}}
+          className={`flex flex-col gap-4 w-full mb-8 ${visibleLinks.length > 3 ? 'link-list-scroll overflow-y-auto' : ''}`}
+          style={visibleLinks.length > 3 ? { maxHeight: maxLinkAreaHeight } : {}}
         >
-          {links.map((link, idx) => (
+          {visibleLinks.map(({ link, index: idx }) => (
             <div 
-              key={idx} 
-              draggable={!isReadOnly}
-              onDragStart={!isReadOnly ? (e) => handleLinkDragStart(e, idx) : undefined}
-              onDragOver={!isReadOnly ? handleLinkDragOver : undefined}
-              onDrop={!isReadOnly ? (e) => handleLinkDrop(e, idx) : undefined}
+              key={link._id || idx}
+              draggable={!isReadOnly && !normalizedQuery}
+              onDragStart={!isReadOnly && !normalizedQuery ? (e) => handleLinkDragStart(e, idx) : undefined}
+              onDragOver={!isReadOnly && !normalizedQuery ? handleLinkDragOver : undefined}
+              onDrop={!isReadOnly && !normalizedQuery ? (e) => handleLinkDrop(e, idx) : undefined}
               className={`draggable-link relative group ${draggedLinkIndex === idx ? 'dragging' : ''} ${slidingLinks.has(idx) ? 'sliding' : ''}`}
             >
-              <a
-                href={link.url}
-                target="_blank"
-                rel="noopener noreferrer"
-                style={{ background: link.color || '#181f29' }}
-                className={`rounded-lg px-3 py-2 w-full block no-underline hover:opacity-90 transition-opacity duration-150 pr-8 ${getLinkStyle(link.color || '#181f29')}`}
+              <div
+                className={`relative overflow-hidden rounded-lg ${isColorDark(link.color || '#181f29') ? '' : 'border'}`}
+                style={{ background: link.color || '#181f29', borderColor: 'rgba(0, 0, 0, 0.16)' }}
               >
-                <span className="font-semibold truncate block">{link.title}</span>
-                <span className="text-xs truncate block">{link.url}</span>
-              </a>
-              {!isReadOnly && (
+                {link.previewImageUrl && (
+                  <a href={link.url} target="_blank" rel="noopener noreferrer" tabIndex={-1}>
+                    <img src={link.previewImageUrl} alt="" loading="lazy" referrerPolicy="no-referrer" className="w-full aspect-[16/8] object-cover" />
+                  </a>
+                )}
+                <a
+                  href={link.url}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className={`px-3 py-2 w-full block no-underline hover:opacity-90 transition-opacity duration-150 pr-8 ${getLinkStyle(link.color || '#181f29')}`}
+                >
+                  <span className="flex items-center gap-2 font-semibold truncate">
+                    {(link.faviconUrl || getFaviconUrl(link.url)) && <img src={link.faviconUrl || getFaviconUrl(link.url)} alt="" loading="lazy" referrerPolicy="no-referrer" onError={(event) => { event.currentTarget.style.display = 'none'; }} className="w-4 h-4 rounded-sm shrink-0" />}
+                    <span className="truncate">{link.siteTitle || link.title}</span>
+                  </span>
+                  {link.siteTitle && link.siteTitle !== link.title && <span className="text-xs opacity-80 truncate block">Saved as: {link.title}</span>}
+                  <span className="text-xs truncate block">{link.url}</span>
+              {expanded && link.description && <span className="text-xs mt-1 line-clamp-2 block">{link.description}</span>}
+                </a>
+                {expanded && (link.note || link.tags?.length > 0) && (
+                  <div className={`px-3 pb-3 ${isColorDark(link.color || '#181f29') ? 'text-white/85' : 'text-gray-800'}`}>
+                    {link.note && <p className="text-xs leading-relaxed">{link.note}</p>}
+                    {link.tags?.length > 0 && (
+                      <div className="flex flex-wrap gap-1.5 mt-2">
+                        {link.tags.map((tag) => <span key={tag} className="rounded-full bg-white/90 text-indigo-700 px-2 py-0.5 text-[11px]">#{tag}</span>)}
+                      </div>
+                    )}
+                  </div>
+                )}
+              </div>
+              {expanded && !isReadOnly && onEditLink && (
                 <button
-                  onClick={() => onDeleteLink && onDeleteLink(idx)}
+                  type="button"
+                  onClick={(event) => { event.stopPropagation(); onEditLink(idx); }}
+                  className="absolute top-2 right-9 flex h-6 w-6 items-center justify-center rounded bg-white/90 text-gray-700 shadow transition-opacity hover:bg-white md:opacity-0 md:group-hover:opacity-100 md:focus:opacity-100"
+                  title="Edit link"
+                  aria-label={`Edit ${link.title || 'link'}`}
+                >
+                  <svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" className="h-4 w-4">
+                    <path strokeLinecap="round" strokeLinejoin="round" d="m16.862 4.487 2.65 2.65M4 20l4.2-.9L19.5 7.8a1.875 1.875 0 0 0-2.65-2.65L5.55 16.45 4 20Z" />
+                  </svg>
+                </button>
+              )}
+              {expanded && !isReadOnly && (
+                <button
+                  type="button"
+                  onClick={(event) => { event.stopPropagation(); onDeleteLink && onDeleteLink(idx); }}
                   disabled={isDeletingLink}
-                  className={`absolute top-2 right-2 text-lg font-bold bg-transparent border-none p-0 m-0 cursor-pointer opacity-80 group-hover:opacity-100 disabled:opacity-50 disabled:cursor-not-allowed ${getDeleteButtonStyle(link.color || '#181f29')}`}
-                  title="Delete Link"
-                  tabIndex={-1}
+                  className="absolute top-2 right-2 flex h-6 w-6 items-center justify-center rounded bg-gray-100 text-gray-900 shadow transition-opacity hover:bg-gray-200 disabled:opacity-50 disabled:cursor-not-allowed md:opacity-0 md:group-hover:opacity-100 md:focus:opacity-100"
+                  title="Delete link"
+                  aria-label={`Delete ${link.title || 'link'}`}
                 >
                   {isDeletingLink ? (
                     <span className="enhanced-button-spinner w-3 h-3"></span>
                   ) : (
-                    <span>&#10005;</span>
+                    <svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" className="h-4 w-4">
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M4 7h16M10 11v6m4-6v6M5.5 7l.8 13h11.4l.8-13M9 7V4h6v3" />
+                    </svg>
                   )}
                 </button>
               )}
@@ -196,6 +248,7 @@ export default function LinkCard({
           ))}
         </div>
       )}
+      {normalizedQuery && visibleLinks.length === 0 && <p className="text-xs text-gray-500 mb-6">No matching links in this board.</p>}
       {/* Add Link Button */}
       {!isReadOnly && (
         <button
@@ -217,4 +270,4 @@ export default function LinkCard({
       )}
     </div>
   );
-} 
+}

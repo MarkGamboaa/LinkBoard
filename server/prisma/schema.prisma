@@ -17,6 +17,8 @@ model Board {
   createdAt  DateTime @default(now())
   updatedAt  DateTime @updatedAt
   links      Link[]
+  members    BoardMember[]
+  invites    BoardInvite[]
 
   @@index([ownerUid, sortOrder])
   @@index([isPublic, createdAt])
@@ -29,9 +31,40 @@ model Link {
   url      String
   color    String?
   position Int     @default(0)
+  tags     String[] @default([])
+  note     String?
+  siteTitle String?
+  description String?
+  previewImageUrl String?
+  faviconUrl String?
   board    Board   @relation(fields: [boardId], references: [id], onDelete: Cascade)
 
   @@index([boardId, position])
+}
+
+model BoardMember {
+  boardId   String
+  userUid   String
+  email     String
+  createdAt DateTime @default(now())
+  board     Board    @relation(fields: [boardId], references: [id], onDelete: Cascade)
+
+  @@id([boardId, userUid])
+  @@index([userUid])
+}
+
+model BoardInvite {
+  id           String    @id @default(cuid())
+  boardId      String
+  email        String
+  tokenHash    String    @unique
+  invitedByUid String
+  expiresAt    DateTime
+  acceptedAt   DateTime?
+  createdAt    DateTime  @default(now())
+  board        Board     @relation(fields: [boardId], references: [id], onDelete: Cascade)
+
+  @@index([boardId, email])
 }
 
 model UserProfile {

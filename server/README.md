@@ -29,3 +29,12 @@ The API uses Fastify, PostgreSQL, Prisma ORM, and Firebase Authentication. Fireb
 The API listens on port 3001 by default. `GET /api/health` reports whether PostgreSQL is reachable. `DATABASE_URL` and Firebase service-account credentials are required before the API can start.
 
 For schema changes during development, use `npm run db:migrate -- --name describe_change` to create and apply a migration.
+
+## LinkBoard features
+
+- Links store tags, notes, and optional site preview metadata.
+- Board templates seed starter links for job search, travel planning, and learning.
+- Owners can create seven-day, email-bound collaboration invites. The app creates a copyable invite link; it does not send email.
+- Website preview metadata is requested by the browser from Microlink when a link is added or its URL changes. Preview failures do not prevent saving the link.
+
+Apply the checked-in migrations after updating the server code with `npm run db:deploy`, then regenerate the Prisma client with `npm run db:generate` if you change the schema locally.

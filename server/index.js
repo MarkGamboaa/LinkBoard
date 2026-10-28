@@ -1,4 +1,5 @@
 import 'dotenv/config';
+import { createHash, randomBytes } from 'node:crypto';
 import Fastify from 'fastify';
 import cors from '@fastify/cors';
 import { applicationDefault, cert, getApps, initializeApp } from 'firebase-admin/app';
@@ -33,10 +34,11 @@ await app.register(cors, {
   origin: process.env.CORS_ORIGIN
     ? process.env.CORS_ORIGIN.split(',').map((origin) => origin.trim())
     : true,
+  methods: ['GET', 'HEAD', 'POST', 'PUT', 'PATCH', 'DELETE'],
 });
 
 app.addHook('onRequest', async (request, reply) => {
-  if (request.method === 'OPTIONS' || request.url === '/' || request.url === '/api/test' || request.url === '/api/health' || request.url === '/api/boards/public') {
+  if (request.method === 'OPTIONS' || request.url === '/' || request.url === '/api/test' || request.url === '/api/health' || request.url === '/api/boards/public' || (request.method === 'GET' && request.url.startsWith('/api/invites/'))) {
     return;
   }
 
@@ -58,33 +60,44 @@ function serializeLink(link) {
   return { ...link, _id: link.id };
 }
 
-function serializeBoard(board) {
+function serializeBoard(board, userUid = null) {
   return {
     ...board,
     _id: board.id,
     userId: board.ownerUid,
     userEmail: board.ownerEmail,
     order: board.sortOrder,
+    isOwner: userUid ? board.ownerUid === userUid : false,
     links: (board.links || []).map(serializeLink),
   };
+}
+
+function safeMetadataUrl(value) {
+  if (typeof value !== 'string' || !value.trim()) return null;
+  try {
+    const url = new URL(value.trim());
+    return ['http:', 'https:'].includes(url.protocol) ? url.toString() : null;
+  } catch {
+    return null;
+  }
 }
 
 function normalizeLinks(links) {
   if (!Array.isArray(links)) return null;
   return links.map((link, position) => ({
     title: String(link?.title || '').trim(),
-    url: String(link?.url || '').trim(),
+    url: safeMetadataUrl(link?.url) || '',
     color: typeof link?.color === 'string' ? link.color : null,
     position,
+    tags: Array.isArray(link?.tags)
+      ? [...new Set(link.tags.map((tag) => String(tag).trim().toLowerCase()).filter(Boolean))].slice(0, 20)
+      : [],
+    note: typeof link?.note === 'string' && link.note.trim() ? link.note.trim().slice(0, 2000) : null,
+    siteTitle: typeof link?.siteTitle === 'string' ? link.siteTitle.trim().slice(0, 300) || null : null,
+    description: typeof link?.description === 'string' ? link.description.trim().slice(0, 1000) || null : null,
+    previewImageUrl: safeMetadataUrl(link?.previewImageUrl),
+    faviconUrl: safeMetadataUrl(link?.faviconUrl),
   }));
-}
-
-async function getBoard(id, ownerUid) {
-  const board = await prisma.board.findFirst({
-    where: { id, ownerUid },
-    include: { links: { orderBy: { position: 'asc' } } },
-  });
-  return board ? serializeBoard(board) : null;
 }
 
 app.get('/', async () => ({ message: 'LinkBoard API is running', status: 'healthy' }));
@@ -103,11 +116,19 @@ app.get('/api/health', async (_request, reply) => {
 
 app.get('/api/boards', async (request) => {
   const boards = await prisma.board.findMany({
-    where: { ownerUid: request.user.uid },
-    include: { links: { orderBy: { position: 'asc' } } },
+    where: {
+      OR: [
+        { ownerUid: request.user.uid },
+        { members: { some: { userUid: request.user.uid } } },
+      ],
+    },
+    include: {
+      links: { orderBy: { position: 'asc' } },
+      members: { select: { userUid: true, email: true, createdAt: true } },
+    },
     orderBy: [{ sortOrder: 'asc' }, { createdAt: 'asc' }],
   });
-  return boards.map(serializeBoard);
+  return boards.map((board) => serializeBoard(board, request.user.uid));
 });
 
 app.get('/api/boards/public', async () => {
@@ -116,7 +137,7 @@ app.get('/api/boards/public', async () => {
     include: { links: { orderBy: { position: 'asc' } } },
     orderBy: { createdAt: 'desc' },
   });
-  return boards.map(serializeBoard);
+  return boards.map((board) => serializeBoard(board));
 });
 
 app.post('/api/boards', async (request, reply) => {
@@ -135,13 +156,18 @@ app.post('/api/boards', async (request, reply) => {
     },
     include: { links: { orderBy: { position: 'asc' } } },
   });
-  return reply.code(201).send(serializeBoard(board));
+  return reply.code(201).send(serializeBoard(board, request.user.uid));
 });
 
 app.put('/api/boards/:id', async (request, reply) => {
   const { id } = request.params;
-  const existing = await prisma.board.findFirst({ where: { id, ownerUid: request.user.uid } });
-  if (!existing) return reply.code(404).send({ error: 'Board not found' });
+  const existing = await prisma.board.findUnique({ where: { id }, include: { members: true } });
+  const isOwner = existing?.ownerUid === request.user.uid;
+  const isMember = existing?.members.some((member) => member.userUid === request.user.uid);
+  if (!existing || (!isOwner && !isMember)) return reply.code(404).send({ error: 'Board not found' });
+  if (!isOwner && (typeof request.body?.title === 'string' || typeof request.body?.isPublic === 'boolean' || Number.isInteger(request.body?.order))) {
+    return reply.code(403).send({ error: 'Only the board owner can change board settings' });
+  }
 
   const data = {};
   if (typeof request.body?.title === 'string') {
@@ -161,7 +187,7 @@ app.put('/api/boards/:id', async (request, reply) => {
   }
 
   const updated = await prisma.$transaction(async (tx) => {
-    await tx.board.update({ where: { id }, data });
+    if (Object.keys(data).length > 0) await tx.board.update({ where: { id }, data });
     if (links) {
       await tx.link.deleteMany({ where: { boardId: id } });
       if (links.length) {
@@ -170,10 +196,10 @@ app.put('/api/boards/:id', async (request, reply) => {
     }
     return tx.board.findUnique({
       where: { id },
-      include: { links: { orderBy: { position: 'asc' } } },
+      include: { links: { orderBy: { position: 'asc' } }, members: true },
     });
   });
-  return serializeBoard(updated);
+  return serializeBoard(updated, request.user.uid);
 });
 
 app.delete('/api/boards/:id', async (request, reply) => {
@@ -181,6 +207,81 @@ app.delete('/api/boards/:id', async (request, reply) => {
     where: { id: request.params.id, ownerUid: request.user.uid },
   });
   if (!result.count) return reply.code(404).send({ error: 'Board not found' });
+  return { success: true };
+});
+
+app.post('/api/boards/:id/invites', async (request, reply) => {
+  const board = await prisma.board.findUnique({ where: { id: request.params.id } });
+  if (!board || board.ownerUid !== request.user.uid) {
+    return reply.code(404).send({ error: 'Board not found' });
+  }
+
+  const email = String(request.body?.email || '').trim().toLowerCase();
+  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+    return reply.code(400).send({ error: 'Enter a valid email address' });
+  }
+  if (email === String(board.ownerEmail || '').toLowerCase()) {
+    return reply.code(400).send({ error: 'You already own this board' });
+  }
+  const existingMember = await prisma.boardMember.findFirst({ where: { boardId: board.id, email } });
+  if (existingMember) return reply.code(409).send({ error: 'This person already has access' });
+
+  await prisma.boardInvite.deleteMany({ where: { boardId: board.id, email, acceptedAt: null } });
+  const token = randomBytes(32).toString('base64url');
+  const tokenHash = createHash('sha256').update(token).digest('hex');
+  const expiresAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000);
+  await prisma.boardInvite.create({
+    data: { boardId: board.id, email, tokenHash, invitedByUid: request.user.uid, expiresAt },
+  });
+  return reply.code(201).send({ token, expiresAt, boardTitle: board.title });
+});
+
+app.get('/api/invites/:token', async (request, reply) => {
+  const tokenHash = createHash('sha256').update(request.params.token).digest('hex');
+  const invite = await prisma.boardInvite.findUnique({
+    where: { tokenHash },
+    include: { board: { select: { title: true } } },
+  });
+  if (!invite || invite.acceptedAt || invite.expiresAt <= new Date()) {
+    return reply.code(404).send({ error: 'This invite is invalid, expired, or already used' });
+  }
+  return { boardTitle: invite.board.title, expiresAt: invite.expiresAt };
+});
+
+app.post('/api/invites/:token/accept', async (request, reply) => {
+  const tokenHash = createHash('sha256').update(request.params.token).digest('hex');
+  const invite = await prisma.boardInvite.findUnique({ where: { tokenHash } });
+  if (!invite || invite.acceptedAt || invite.expiresAt <= new Date()) {
+    return reply.code(404).send({ error: 'This invite is invalid, expired, or already used' });
+  }
+
+  const userEmail = String(request.user.email || '').trim().toLowerCase();
+  if (!userEmail || userEmail !== invite.email) {
+    return reply.code(403).send({ error: 'Sign in with the email address this invite was sent to' });
+  }
+
+  await prisma.$transaction([
+    prisma.boardMember.upsert({
+      where: { boardId_userUid: { boardId: invite.boardId, userUid: request.user.uid } },
+      create: { boardId: invite.boardId, userUid: request.user.uid, email: userEmail },
+      update: { email: userEmail },
+    }),
+    prisma.boardInvite.update({ where: { id: invite.id }, data: { acceptedAt: new Date() } }),
+  ]);
+  return { success: true, boardId: invite.boardId };
+});
+
+app.delete('/api/boards/:id/members/:userUid', async (request, reply) => {
+  const board = await prisma.board.findUnique({ where: { id: request.params.id } });
+  if (!board || board.ownerUid !== request.user.uid) {
+    return reply.code(404).send({ error: 'Board not found' });
+  }
+  if (request.params.userUid === board.ownerUid) {
+    return reply.code(400).send({ error: 'The board owner cannot be removed' });
+  }
+  await prisma.boardMember.deleteMany({
+    where: { boardId: board.id, userUid: request.params.userUid },
+  });
   return { success: true };
 });
 
