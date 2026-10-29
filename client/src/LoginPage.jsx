@@ -1,6 +1,5 @@
 import React, { useState } from "react";
-import { sendPasswordResetEmail, signInWithEmailAndPassword } from "firebase/auth";
-import { auth } from "./firebase";
+import { supabase, normalizeAuthUser } from "./supabase";
 import LinkBoardLogo from "./assets/linkboard-mark.svg";
 
 export default function LoginPage({ onBack, onSignup, onLogin, continueWithBoardCopy = false }) {
@@ -18,8 +17,9 @@ export default function LoginPage({ onBack, onSignup, onLogin, continueWithBoard
     setResetNotice("");
     setLoading(true);
     try {
-      const userCredential = await signInWithEmailAndPassword(auth, email, password);
-      if (onLogin) onLogin(userCredential.user);
+      const { data, error: signInError } = await supabase.auth.signInWithPassword({ email, password });
+      if (signInError) throw signInError;
+      if (onLogin) onLogin(normalizeAuthUser(data.user));
     } catch {
       setError("Invalid email or password");
     } finally {
@@ -38,18 +38,12 @@ export default function LoginPage({ onBack, onSignup, onLogin, continueWithBoard
 
     setResetLoading(true);
     try {
-      await sendPasswordResetEmail(auth, resetEmail);
+      await supabase.auth.resetPasswordForEmail(resetEmail, {
+        redirectTo: `${window.location.origin}/reset-password`,
+      });
       setResetNotice("Password reset request submitted. Check your inbox for a reset link.");
     } catch (resetError) {
-      if (resetError.code === 'auth/user-not-found') {
-        setResetNotice("Password reset request submitted. Check your inbox for a reset link.");
-      } else if (resetError.code === 'auth/invalid-email') {
-        setError("Enter a valid email address.");
-      } else if (resetError.code === 'auth/too-many-requests') {
-        setError("Too many attempts. Please wait a little and try again.");
-      } else {
-        setError("Could not send a reset email right now. Please try again.");
-      }
+      setError(resetError.message || "Could not send a reset email right now. Please try again.");
     } finally {
       setResetLoading(false);
     }

@@ -1,10 +1,10 @@
 import React, { useState } from "react";
 import BrandLogo from "./BrandLogo";
-import { createUserWithEmailAndPassword, sendEmailVerification, updateProfile } from "firebase/auth";
-import { auth, validatePassword, updateUserProfile } from "./firebase";
+import { supabase } from "./supabase";
+import { validatePassword, updateUserProfile } from "./auth";
 import LinkBoardLogo from "./assets/linkboard-mark.svg";
 
-export default function SignupPage({ onBack, onLogin, continueWithBoardCopy = false }) {
+export default function SignupPage({ onBack, onLogin, continueWithBoardCopy = false, inviteToken = null, pendingBoardCopyId = null }) {
   const [firstName, setFirstName] = useState("");
   const [lastName, setLastName] = useState("");
   const [nickname, setNickname] = useState("");
@@ -36,29 +36,31 @@ export default function SignupPage({ onBack, onLogin, continueWithBoardCopy = fa
     }
 
     try {
-      const userCredential = await createUserWithEmailAndPassword(auth, email, password);
-      let verificationMessage = "Account created. Check your inbox and verify your email to accept shared board invitations.";
-      try {
-        await sendEmailVerification(userCredential.user);
-      } catch (verificationError) {
-        console.warn('Could not send the email verification message:', verificationError);
-        verificationMessage = "Account created, but the verification email could not be sent. You can request another from an invitation page.";
+      const { data, error: signupError } = await supabase.auth.signUp({
+        email,
+        password,
+        options: {
+          emailRedirectTo: inviteToken
+            ? `${window.location.origin}/invite?invite=${encodeURIComponent(inviteToken)}`
+            : `${window.location.origin}/login${pendingBoardCopyId ? `?copyBoard=${encodeURIComponent(pendingBoardCopyId)}` : ''}`,
+          data: {
+            first_name: firstName.trim(),
+            last_name: lastName.trim(),
+            nickname: cleanNickname,
+            display_name: `${firstName} ${lastName}`.trim(),
+          },
+        },
+      });
+      if (signupError) throw signupError;
+
+      if (data.session) {
+        const profileResult = await updateUserProfile(firstName.trim(), lastName.trim(), cleanNickname);
+        if (!profileResult.success) console.error('Failed to save profile:', profileResult.message);
+        setSuccess('Account created successfully.');
+      } else {
+        setSuccess('Account created. Check your inbox to confirm your email, then log in.');
       }
-      
-      // Save both first and last name in displayName
-      await updateProfile(userCredential.user, { displayName: `${firstName} ${lastName}`.trim() });
-      
-      // Save profile data through the authenticated API
-      const profileResult = await updateUserProfile(firstName.trim(), lastName.trim(), cleanNickname);
-      if (!profileResult.success) {
-        console.error('Failed to save profile:', profileResult.message);
-      }
-      
-      setSuccess(verificationMessage);
       setFirstName(""); setLastName(""); setNickname(""); setEmail(""); setPassword("");
-      // Firebase signs the new user in as part of account creation. The app's
-      // auth listener redirects them to their dashboard, where pending actions
-      // such as copying a public board can finish.
     } catch (err) {
       setError(err.message);
     } finally {

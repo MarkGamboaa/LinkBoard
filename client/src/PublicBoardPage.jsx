@@ -3,7 +3,7 @@ import BrandLogo from "./BrandLogo";
 import LinkCard from "./LinkCard";
 import Masonry from "react-masonry-css";
 import LoadingSpinner from "./components/LoadingSpinner.jsx";
-import { apiFetch } from "./firebase";
+import { apiFetch } from "./auth";
 import { getApiUrl } from "./utils/api";
 
 export default function PublicBoardPage({ onLogin, onSignup, onBackToDashboard, onRequireLoginToCopy, isLoggedIn = false }) {

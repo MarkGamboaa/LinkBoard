@@ -9,10 +9,11 @@ import DashboardPage from './DashboardPage.jsx';
 import ProfilePage from './ProfilePage.jsx';
 import PublicBoardPage from './PublicBoardPage.jsx';
 import BoardInvitePage from './BoardInvitePage.jsx';
+import ResetPasswordPage from './ResetPasswordPage.jsx';
 import LoadingSpinner from './components/LoadingSpinner.jsx';
 import ToastContainer from './components/ToastContainer.jsx';
-import { auth } from './firebase';
-import { onAuthStateChanged } from 'firebase/auth';
+import { supabase, normalizeAuthUser } from './supabase';
+import { syncProfileFromAuthMetadata } from './auth';
 
 const routeByPath = {
   '/': 'landing',
@@ -22,6 +23,7 @@ const routeByPath = {
   '/profile': 'profile',
   '/public': 'public',
   '/invite': 'invite',
+  '/reset-password': 'reset-password',
 };
 
 const getPageFromLocation = () => {
@@ -39,6 +41,7 @@ const getPathForPage = (page, inviteToken = null) => {
     profile: '/profile',
     public: '/public',
     invite: '/invite',
+    'reset-password': '/reset-password',
   };
   const path = paths[page] || '/';
   return page === 'invite' && inviteToken
@@ -50,7 +53,7 @@ function App() {
   const [inviteToken, setInviteToken] = useState(() => new URLSearchParams(window.location.search).get('invite'));
   const [page, setPageState] = useState(getPageFromLocation);
   const [user, setUser] = useState(null);
-  const [pendingBoardCopyId, setPendingBoardCopyId] = useState(null);
+  const [pendingBoardCopyId, setPendingBoardCopyId] = useState(() => new URLSearchParams(window.location.search).get('copyBoard'));
   const [loading, setLoading] = useState(true);
 
   const navigate = (nextPage, { replace = false } = {}) => {
@@ -89,18 +92,24 @@ function App() {
   }, []);
 
   useEffect(() => {
-    const unsubscribe = onAuthStateChanged(auth, (firebaseUser) => {
-      setUser(firebaseUser);
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
+      const authUser = normalizeAuthUser(session?.user || null);
+      setUser(authUser);
       setLoading(false);
+      if (authUser && ['SIGNED_IN', 'INITIAL_SESSION'].includes(event)) {
+        window.setTimeout(() => syncProfileFromAuthMetadata(session.user), 0);
+      }
       const currentPage = getPageFromLocation();
-      if (firebaseUser) {
+      if (event === 'PASSWORD_RECOVERY') {
+        navigate('reset-password', { replace: true });
+      } else if (authUser) {
         const nextPage = inviteToken ? 'invite' : ['landing', 'login', 'signup'].includes(currentPage) ? 'dashboard' : currentPage;
         if (nextPage !== currentPage) navigate(nextPage, { replace: true });
       } else if (['dashboard', 'profile'].includes(currentPage)) {
         navigate('landing', { replace: true });
       }
     });
-    return () => unsubscribe();
+    return () => subscription.unsubscribe();
   }, [inviteToken]);
 
   if (loading) {
@@ -109,7 +118,7 @@ function App() {
 
   const handleLogout = async () => {
     try {
-      await auth.signOut();
+      await supabase.auth.signOut();
       setUser(null);
       navigate('landing', { replace: true });
     } catch (error) {
@@ -125,7 +134,7 @@ function App() {
         onLogin={() => navigate('login')}
         onSignup={() => navigate('signup')}
         onSwitchAccount={async () => {
-          await auth.signOut();
+          await supabase.auth.signOut();
           setUser(null);
           navigate('invite', { replace: true });
         }}
@@ -189,7 +198,7 @@ function App() {
   if (page === 'signup') {
     return (
       <>
-        <SignupPage onBack={() => goBack('landing')} onLogin={() => navigate('login')} continueWithBoardCopy={Boolean(pendingBoardCopyId)} />
+        <SignupPage onBack={() => goBack('landing')} onLogin={() => navigate('login')} continueWithBoardCopy={Boolean(pendingBoardCopyId)} inviteToken={inviteToken} pendingBoardCopyId={pendingBoardCopyId} />
         <ToastContainer />
       </>
     );
@@ -201,6 +210,9 @@ function App() {
         <ToastContainer />
       </>
     );
+  }
+  if (page === 'reset-password') {
+    return <ResetPasswordPage onLogin={() => navigate('login', { replace: true })} />;
   }
   return (
     <>

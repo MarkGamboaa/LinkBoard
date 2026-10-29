@@ -1,9 +1,9 @@
 import React, { useState, useEffect, useRef } from "react";
 import BrandLogo from "./BrandLogo";
-import { updateUserProfile, getUserProfile, uploadProfileImage, deleteProfileImage, changeUserPassword, validatePassword, deleteUserAccount } from "./firebase";
+import { updateUserProfile, getUserProfile, uploadProfileImage, deleteProfileImage, changeUserPassword, validatePassword, deleteUserAccount } from "./auth";
 import LoadingSpinner from "./components/LoadingSpinner.jsx";
 
-import { auth } from "./firebase";
+import { supabase, normalizeAuthUser } from "./supabase";
 export default function ProfilePage({ user, onBack, onLogout, onUserUpdate }) {
   const [menuOpen, setMenuOpen] = useState(false);
   const [editMode, setEditMode] = useState(false);
@@ -52,7 +52,7 @@ export default function ProfilePage({ user, onBack, onLogout, onUserUpdate }) {
           setLastName(result.data.lastName || '');
           setNickname(result.data.nickname || '');
         } else {
-          // Fall back to Firebase Auth displayName if no profile is saved.
+          // Fall back to the signed-in account's display name if no profile is saved.
           const displayNameParts = user?.displayName?.split(' ') || [];
           setFirstName(displayNameParts[0] || '');
           setLastName(displayNameParts.slice(1).join(' ') || '');
@@ -60,7 +60,7 @@ export default function ProfilePage({ user, onBack, onLogout, onUserUpdate }) {
         }
       } catch (error) {
         console.error('Error loading user profile:', error);
-        // Fallback to Firebase Auth displayName
+        // Fall back to the signed-in account's display name.
         const displayNameParts = user?.displayName?.split(' ') || [];
         setFirstName(displayNameParts[0] || '');
         setLastName(displayNameParts.slice(1).join(' ') || '');
@@ -141,11 +141,12 @@ export default function ProfilePage({ user, onBack, onLogout, onUserUpdate }) {
         // Immediately update local state to show the change
         setLocalPhotoURL(result.url);
         // Reload the user to get the latest data
-        await auth.currentUser.reload();
+        const { data: { user: freshUser } } = await supabase.auth.getUser();
+        const normalizedUser = normalizeAuthUser(freshUser);
         // Small delay to ensure the update is complete
         await new Promise(resolve => setTimeout(resolve, 100));
         // Update the user state in the parent component
-        if (onUserUpdate) onUserUpdate(auth.currentUser);
+        if (onUserUpdate) onUserUpdate(normalizedUser);
         window.showToast('Profile image updated successfully!', 'success');
       } else {
         window.showToast('Failed to upload image: ' + result.message, 'error');
@@ -172,14 +173,15 @@ export default function ProfilePage({ user, onBack, onLogout, onUserUpdate }) {
         // Immediately update local state to show the change
         setLocalPhotoURL(null);
         // Reload the user to get the latest data
-        await auth.currentUser.reload();
-        console.log('After reload - auth.currentUser.photoURL:', auth.currentUser.photoURL);
+        const { data: { user: freshUser } } = await supabase.auth.getUser();
+        const normalizedUser = normalizeAuthUser(freshUser);
+        console.log('After reload - user.photoURL:', normalizedUser.photoURL);
         // Small delay to ensure the update is complete
         await new Promise(resolve => setTimeout(resolve, 100));
         // Update the user state in the parent component
         if (onUserUpdate) {
-          console.log('Calling onUserUpdate with:', auth.currentUser);
-          onUserUpdate(auth.currentUser);
+          console.log('Calling onUserUpdate with:', normalizedUser);
+          onUserUpdate(normalizedUser);
         }
         window.showToast('Profile image deleted successfully!', 'success');
       } else {

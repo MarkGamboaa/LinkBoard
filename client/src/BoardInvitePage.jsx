@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import BrandLogo from './BrandLogo';
-import { apiFetch } from './firebase';
+import { apiFetch } from './auth';
 import { getApiUrl } from './utils/api';
 
 export default function BoardInvitePage({ token, user, onLogin, onSignup, onSwitchAccount, onAccepted }) {

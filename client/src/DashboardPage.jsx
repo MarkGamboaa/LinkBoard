@@ -4,7 +4,7 @@ import LinkCard from "./LinkCard";
 import Masonry from "react-masonry-css";
 import LoadingSpinner from "./components/LoadingSpinner.jsx";
 import ProfilePage from "./ProfilePage.jsx";
-import { apiFetch, getUserProfile } from "./firebase";
+import { apiFetch, getUserProfile } from "./auth";
 import { BOARD_TEMPLATES } from "./data/boardTemplates";
 import { fetchLinkPreview } from "./utils/linkPreview";
 
