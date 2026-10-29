@@ -1,14 +1,14 @@
 # LinkBoard API
 
-The API uses Fastify, PostgreSQL, Prisma ORM, and Supabase Auth. The API validates each signed-in user's access token with Supabase before accessing private profile or board data. PostgreSQL can be hosted by Supabase, so auth and app data can live in the same Supabase project.
+The API uses Fastify, PostgreSQL, Prisma ORM, and Firebase Authentication. The API validates each signed-in user's Firebase ID token before accessing private profile or board data. PostgreSQL may remain hosted by Supabase; Firebase is used for authentication only.
 
 ## Local setup
 
 1. Install Node.js 24 LTS and PostgreSQL, or create a PostgreSQL database with a managed provider.
-2. Copy `server/.env.example` to `server/.env` and set `DATABASE_URL` and `DIRECT_URL` to the PostgreSQL connection URLs. For Supabase, use the pooler URLs shown in Project Settings → Database.
-3. Set `SUPABASE_URL` and `SUPABASE_ANON_KEY` from Project Settings → API. Set `SUPABASE_SERVICE_ROLE_KEY` for the server only; never put it in the client or commit it.
-4. Copy `client/.env.example` to `client/.env` and set `VITE_SUPABASE_URL` and `VITE_SUPABASE_ANON_KEY` to the same Supabase project values.
-5. In Supabase Authentication → URL Configuration, set the local and production Site URLs and allow the `/login`, `/invite`, and `/reset-password` redirects. Keep email confirmation enabled if you want new users to verify their address before signing in. Password reset requests use the Supabase email template; edit its branding in Authentication → Email Templates.
+2. Configure `DATABASE_URL` for PostgreSQL. If PostgreSQL is hosted by Supabase, use its connection URL from Project Settings → Database.
+3. Keep Firebase Authentication enabled in the Firebase project. The client uses the Firebase project configuration in `client/src/firebase.js`.
+4. Set `FIREBASE_PROJECT_ID` and configure Firebase Admin credentials for the API. Locally, use `GOOGLE_APPLICATION_CREDENTIALS` pointing to a service-account JSON file; on a hosted server, provide the service-account credentials using the platform's secret manager.
+5. Set Firebase Authentication's authorized domains and email templates in the Firebase console. Password reset and verification emails are sent by Firebase.
 6. Install dependencies and generate Prisma Client:
 
    ```powershell
@@ -28,7 +28,7 @@ The API uses Fastify, PostgreSQL, Prisma ORM, and Supabase Auth. The API validat
    npm start
    ```
 
-The API listens on port 3001 by default. `GET /api/health` reports whether PostgreSQL is reachable. `DATABASE_URL`, `SUPABASE_URL`, `SUPABASE_ANON_KEY`, and `SUPABASE_SERVICE_ROLE_KEY` are required before the API can start.
+The API listens on port 3001 by default. `GET /api/health` reports whether PostgreSQL is reachable. `DATABASE_URL` and Firebase Admin credentials are required before the API can start.
 
 For schema changes during development, use `npm run db:migrate -- --name describe_change` to create and apply a migration.
 

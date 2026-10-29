@@ -9,11 +9,10 @@ import DashboardPage from './DashboardPage.jsx';
 import ProfilePage from './ProfilePage.jsx';
 import PublicBoardPage from './PublicBoardPage.jsx';
 import BoardInvitePage from './BoardInvitePage.jsx';
-import ResetPasswordPage from './ResetPasswordPage.jsx';
 import LoadingSpinner from './components/LoadingSpinner.jsx';
 import ToastContainer from './components/ToastContainer.jsx';
-import { supabase, normalizeAuthUser } from './supabase';
-import { syncProfileFromAuthMetadata } from './auth';
+import { onAuthStateChanged, signOut } from 'firebase/auth';
+import { auth } from './firebase';
 
 const routeByPath = {
   '/': 'landing',
@@ -23,7 +22,6 @@ const routeByPath = {
   '/profile': 'profile',
   '/public': 'public',
   '/invite': 'invite',
-  '/reset-password': 'reset-password',
 };
 
 const getPageFromLocation = () => {
@@ -41,7 +39,6 @@ const getPathForPage = (page, inviteToken = null) => {
     profile: '/profile',
     public: '/public',
     invite: '/invite',
-    'reset-password': '/reset-password',
   };
   const path = paths[page] || '/';
   return page === 'invite' && inviteToken
@@ -92,24 +89,18 @@ function App() {
   }, []);
 
   useEffect(() => {
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
-      const authUser = normalizeAuthUser(session?.user || null);
+    const unsubscribe = onAuthStateChanged(auth, (authUser) => {
       setUser(authUser);
       setLoading(false);
-      if (authUser && ['SIGNED_IN', 'INITIAL_SESSION'].includes(event)) {
-        window.setTimeout(() => syncProfileFromAuthMetadata(session.user), 0);
-      }
       const currentPage = getPageFromLocation();
-      if (event === 'PASSWORD_RECOVERY') {
-        navigate('reset-password', { replace: true });
-      } else if (authUser) {
+      if (authUser) {
         const nextPage = inviteToken ? 'invite' : ['landing', 'login', 'signup'].includes(currentPage) ? 'dashboard' : currentPage;
         if (nextPage !== currentPage) navigate(nextPage, { replace: true });
       } else if (['dashboard', 'profile'].includes(currentPage)) {
         navigate('landing', { replace: true });
       }
     });
-    return () => subscription.unsubscribe();
+    return unsubscribe;
   }, [inviteToken]);
 
   if (loading) {
@@ -118,7 +109,7 @@ function App() {
 
   const handleLogout = async () => {
     try {
-      await supabase.auth.signOut();
+      await signOut(auth);
       setUser(null);
       navigate('landing', { replace: true });
     } catch (error) {
@@ -134,7 +125,7 @@ function App() {
         onLogin={() => navigate('login')}
         onSignup={() => navigate('signup')}
         onSwitchAccount={async () => {
-          await supabase.auth.signOut();
+          await signOut(auth);
           setUser(null);
           navigate('invite', { replace: true });
         }}
@@ -210,9 +201,6 @@ function App() {
         <ToastContainer />
       </>
     );
-  }
-  if (page === 'reset-password') {
-    return <ResetPasswordPage onLogin={() => navigate('login', { replace: true })} />;
   }
   return (
     <>

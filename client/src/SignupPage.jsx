@@ -1,7 +1,7 @@
 import React, { useState } from "react";
 import BrandLogo from "./BrandLogo";
-import { supabase } from "./supabase";
-import { validatePassword, updateUserProfile } from "./auth";
+import { createUserWithEmailAndPassword, sendEmailVerification, updateProfile } from 'firebase/auth';
+import { auth, validatePassword, updateUserProfile } from './firebase';
 import LinkBoardLogo from "./assets/linkboard-mark.svg";
 
 export default function SignupPage({ onBack, onLogin, continueWithBoardCopy = false, inviteToken = null, pendingBoardCopyId = null }) {
@@ -10,6 +10,7 @@ export default function SignupPage({ onBack, onLogin, continueWithBoardCopy = fa
   const [nickname, setNickname] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState("");
   const [success, setSuccess] = useState("");
   const [loading, setLoading] = useState(false);
@@ -36,30 +37,18 @@ export default function SignupPage({ onBack, onLogin, continueWithBoardCopy = fa
     }
 
     try {
-      const { data, error: signupError } = await supabase.auth.signUp({
-        email,
-        password,
-        options: {
-          emailRedirectTo: inviteToken
-            ? `${window.location.origin}/invite?invite=${encodeURIComponent(inviteToken)}`
-            : `${window.location.origin}/login${pendingBoardCopyId ? `?copyBoard=${encodeURIComponent(pendingBoardCopyId)}` : ''}`,
-          data: {
-            first_name: firstName.trim(),
-            last_name: lastName.trim(),
-            nickname: cleanNickname,
-            display_name: `${firstName} ${lastName}`.trim(),
-          },
-        },
-      });
-      if (signupError) throw signupError;
-
-      if (data.session) {
-        const profileResult = await updateUserProfile(firstName.trim(), lastName.trim(), cleanNickname);
-        if (!profileResult.success) console.error('Failed to save profile:', profileResult.message);
-        setSuccess('Account created successfully.');
-      } else {
-        setSuccess('Account created. Check your inbox to confirm your email, then log in.');
+      const userCredential = await createUserWithEmailAndPassword(auth, email, password);
+      let verificationMessage = 'Account created. Check your inbox and verify your email to accept shared board invitations.';
+      try {
+        await sendEmailVerification(userCredential.user);
+      } catch (verificationError) {
+        console.warn('Could not send the email verification message:', verificationError);
+        verificationMessage = 'Account created, but the verification email could not be sent. You can request another from an invitation page.';
       }
+      await updateProfile(userCredential.user, { displayName: `${firstName} ${lastName}`.trim() });
+      const profileResult = await updateUserProfile(firstName.trim(), lastName.trim(), cleanNickname);
+      if (!profileResult.success) console.error('Failed to save profile:', profileResult.message);
+      setSuccess(verificationMessage);
       setFirstName(""); setLastName(""); setNickname(""); setEmail(""); setPassword("");
     } catch (err) {
       setError(err.message);
@@ -104,7 +93,28 @@ export default function SignupPage({ onBack, onLogin, continueWithBoardCopy = fa
               <input type="text" placeholder="Last name" className="input input-bordered w-full input-enhanced enhanced-focus" value={lastName} onChange={e => setLastName(e.target.value)} />
               <input type="email" placeholder="Email" className="input input-bordered w-full input-enhanced enhanced-focus" value={email} onChange={e => setEmail(e.target.value)} />
               <div>
-                <input type="password" placeholder="Password" className="input input-bordered w-full input-enhanced enhanced-focus" value={password} onChange={e => setPassword(e.target.value)} />
+                <div className="relative">
+                  <input autoComplete="new-password" type={showPassword ? 'text' : 'password'} placeholder="Password" className="password-input-no-native-reveal input input-bordered w-full pr-12 input-enhanced enhanced-focus" value={password} onChange={e => setPassword(e.target.value)} />
+                  <button
+                    type="button"
+                    onMouseDown={(event) => event.preventDefault()}
+                    onClick={() => setShowPassword((visible) => !visible)}
+                    className="absolute right-3 top-1/2 z-10 -translate-y-1/2 rounded bg-transparent p-1 text-gray-500 hover:bg-transparent active:bg-transparent hover:text-gray-800 focus-visible:outline focus-visible:outline-2 focus-visible:outline-indigo-600"
+                    aria-label={showPassword ? 'Hide password' : 'Show password'}
+                  >
+                    {showPassword ? (
+                      <svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" className="h-5 w-5">
+                        <path strokeLinecap="round" strokeLinejoin="round" d="m3 3 18 18M10.6 10.6a2 2 0 0 0 2.8 2.8" />
+                        <path strokeLinecap="round" strokeLinejoin="round" d="M9.9 5.2A10.8 10.8 0 0 1 12 5c5 0 8.5 4.2 9.5 6.1a1.8 1.8 0 0 1 0 1.8 12 12 0 0 1-3.1 3.5M6.2 6.2A13 13 0 0 0 2.5 11a1.8 1.8 0 0 0 0 1.8A10.8 10.8 0 0 0 12 19c.8 0 1.6-.1 2.3-.3" />
+                      </svg>
+                    ) : (
+                      <svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" className="h-5 w-5">
+                        <path strokeLinecap="round" strokeLinejoin="round" d="M2.5 12s3.5-7 9.5-7 9.5 7 9.5 7-3.5 7-9.5 7-9.5-7-9.5-7Z" />
+                        <circle cx="12" cy="12" r="2.5" />
+                      </svg>
+                    )}
+                  </button>
+                </div>
                 <div className="text-xs text-gray-500 mt-1">
                   Must be at least 8 characters with 1 uppercase letter and 1 special character
                 </div>

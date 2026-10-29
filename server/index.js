@@ -2,26 +2,22 @@ import 'dotenv/config';
 import { createHash, randomBytes } from 'node:crypto';
 import Fastify from 'fastify';
 import cors from '@fastify/cors';
-import { createClient } from '@supabase/supabase-js';
+import { applicationDefault, cert, getApps, initializeApp } from 'firebase-admin/app';
+import { getAuth } from 'firebase-admin/auth';
 import { PrismaPg } from '@prisma/adapter-pg';
 import { PrismaClient } from './generated/prisma/client.ts';
 
 const port = Number(process.env.PORT || 3001);
 const databaseUrl = process.env.DATABASE_URL;
-const supabaseUrl = process.env.SUPABASE_URL;
-const supabaseAnonKey = process.env.SUPABASE_ANON_KEY;
-const supabaseServiceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+const firebaseProjectId = process.env.FIREBASE_PROJECT_ID || 'linkboard-5af54';
 
 if (!databaseUrl) throw new Error('DATABASE_URL is required.');
-if (!supabaseUrl || !supabaseAnonKey || !supabaseServiceRoleKey) {
-  throw new Error('SUPABASE_URL, SUPABASE_ANON_KEY, and SUPABASE_SERVICE_ROLE_KEY are required.');
-}
-
-const supabaseAuth = createClient(supabaseUrl, supabaseAnonKey, {
-  auth: { autoRefreshToken: false, persistSession: false },
-});
-const supabaseAdmin = createClient(supabaseUrl, supabaseServiceRoleKey, {
-  auth: { autoRefreshToken: false, persistSession: false },
+const serviceAccount = process.env.FIREBASE_SERVICE_ACCOUNT_JSON
+  ? JSON.parse(process.env.FIREBASE_SERVICE_ACCOUNT_JSON)
+  : null;
+const firebaseApp = getApps()[0] || initializeApp({
+  credential: serviceAccount ? cert(serviceAccount) : applicationDefault(),
+  projectId: firebaseProjectId,
 });
 
 const prisma = new PrismaClient({
@@ -44,18 +40,17 @@ app.addHook('onRequest', async (request, reply) => {
 
   const authorization = request.headers.authorization;
   if (!authorization?.startsWith('Bearer ')) {
-    return reply.code(401).send({ error: 'A Supabase sign-in token is required' });
+    return reply.code(401).send({ error: 'A Firebase sign-in token is required' });
   }
 
   try {
-    const { data: { user }, error } = await supabaseAuth.auth.getUser(authorization.slice(7));
-    if (error || !user) throw error || new Error('No user returned for access token');
+    const decodedToken = await getAuth(firebaseApp).verifyIdToken(authorization.slice(7));
     request.user = {
-      uid: user.id,
-      email: user.email || null,
+      uid: decodedToken.uid,
+      email: decodedToken.email || null,
     };
   } catch (error) {
-    request.log.warn({ err: error }, 'Supabase token verification failed');
+    request.log.warn({ err: error }, 'Firebase token verification failed');
     return reply.code(401).send({ error: 'Invalid or expired sign-in token' });
   }
 });
@@ -146,16 +141,16 @@ app.get('/api/boards', async (request) => {
     orderBy: [{ sortOrder: 'asc' }, { createdAt: 'asc' }],
   });
   const ownerProfiles = await prisma.userProfile.findMany({
-    where: { authUid: { in: [...new Set(boards.map((board) => board.ownerUid))] } },
-    select: { authUid: true, nickname: true },
+    where: { firebaseUid: { in: [...new Set(boards.map((board) => board.ownerUid))] } },
+    select: { firebaseUid: true, nickname: true },
   });
-  const ownerNicknames = new Map(ownerProfiles.map((profile) => [profile.authUid, profile.nickname?.trim()]));
+  const ownerNicknames = new Map(ownerProfiles.map((profile) => [profile.firebaseUid, profile.nickname?.trim()]));
   const memberUids = [...new Set(boards.flatMap((board) => board.members.map((member) => member.userUid)))];
   const memberProfiles = await prisma.userProfile.findMany({
-    where: { authUid: { in: memberUids } },
-    select: { authUid: true, nickname: true },
+    where: { firebaseUid: { in: memberUids } },
+    select: { firebaseUid: true, nickname: true },
   });
-  const memberNicknames = new Map(memberProfiles.map((profile) => [profile.authUid, profile.nickname?.trim()]));
+  const memberNicknames = new Map(memberProfiles.map((profile) => [profile.firebaseUid, profile.nickname?.trim()]));
   return boards.map((board) => ({
     ...serializeBoard(board, request.user.uid),
     members: board.members.map((member) => ({
@@ -173,10 +168,10 @@ app.get('/api/boards/public', async () => {
     orderBy: { createdAt: 'desc' },
   });
   const ownerProfiles = await prisma.userProfile.findMany({
-    where: { authUid: { in: [...new Set(boards.map((board) => board.ownerUid))] } },
-    select: { authUid: true, nickname: true },
+    where: { firebaseUid: { in: [...new Set(boards.map((board) => board.ownerUid))] } },
+    select: { firebaseUid: true, nickname: true },
   });
-  const ownerNicknames = new Map(ownerProfiles.map((profile) => [profile.authUid, profile.nickname?.trim()]));
+  const ownerNicknames = new Map(ownerProfiles.map((profile) => [profile.firebaseUid, profile.nickname?.trim()]));
   return boards.map((board) => ({
     _id: board.id,
     title: board.title,
@@ -329,7 +324,7 @@ app.get('/api/invites/:token', async (request, reply) => {
     return reply.code(404).send({ error: 'This invite is invalid, expired, or already used' });
   }
   const ownerProfile = await prisma.userProfile.findUnique({
-    where: { authUid: invite.board.ownerUid },
+    where: { firebaseUid: invite.board.ownerUid },
     select: { nickname: true },
   });
   return {
@@ -379,9 +374,9 @@ app.delete('/api/boards', async (request) => {
 });
 
 app.get('/api/profile', async (request, reply) => {
-  const profile = await prisma.userProfile.findUnique({ where: { authUid: request.user.uid } });
+  const profile = await prisma.userProfile.findUnique({ where: { firebaseUid: request.user.uid } });
   if (!profile) return reply.code(404).send({ error: 'Profile not found' });
-  return { ...profile, userId: profile.authUid };
+  return { ...profile, userId: profile.firebaseUid };
 });
 
 app.post('/api/profile', async (request, reply) => {
@@ -399,9 +394,9 @@ app.post('/api/profile', async (request, reply) => {
 
   const displayName = `${firstName} ${lastName}`;
   const profile = await prisma.userProfile.upsert({
-    where: { authUid: request.user.uid },
+    where: { firebaseUid: request.user.uid },
     create: {
-      authUid: request.user.uid,
+      firebaseUid: request.user.uid,
       email: request.user.email,
       firstName,
       lastName,
@@ -417,22 +412,13 @@ app.post('/api/profile', async (request, reply) => {
       updatedAt: new Date(),
     },
   });
-  return { ...profile, userId: profile.authUid };
+  return { ...profile, userId: profile.firebaseUid };
 });
 
 app.delete('/api/profile', async (request) => {
-  await prisma.userProfile.deleteMany({ where: { authUid: request.user.uid } });
-  return { success: true, message: 'Profile deleted successfully' };
-});
-
-app.delete('/api/auth/account', async (request, reply) => {
   await prisma.boardMember.deleteMany({ where: { userUid: request.user.uid } });
-  const { error } = await supabaseAdmin.auth.admin.deleteUser(request.user.uid);
-  if (error) {
-    request.log.error({ err: error }, 'Supabase account deletion failed');
-    return reply.code(502).send({ error: 'Could not delete the authentication account' });
-  }
-  return { success: true };
+  await prisma.userProfile.deleteMany({ where: { firebaseUid: request.user.uid } });
+  return { success: true, message: 'Profile deleted successfully' };
 });
 
 app.setErrorHandler((error, request, reply) => {

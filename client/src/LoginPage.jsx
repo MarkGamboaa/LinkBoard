@@ -1,5 +1,6 @@
 import React, { useState } from "react";
-import { supabase, normalizeAuthUser } from "./supabase";
+import { sendPasswordResetEmail, signInWithEmailAndPassword } from 'firebase/auth';
+import { auth } from './firebase';
 import LinkBoardLogo from "./assets/linkboard-mark.svg";
 
 export default function LoginPage({ onBack, onSignup, onLogin, continueWithBoardCopy = false }) {
@@ -17,9 +18,8 @@ export default function LoginPage({ onBack, onSignup, onLogin, continueWithBoard
     setResetNotice("");
     setLoading(true);
     try {
-      const { data, error: signInError } = await supabase.auth.signInWithPassword({ email, password });
-      if (signInError) throw signInError;
-      if (onLogin) onLogin(normalizeAuthUser(data.user));
+      const userCredential = await signInWithEmailAndPassword(auth, email, password);
+      if (onLogin) onLogin(userCredential.user);
     } catch {
       setError("Invalid email or password");
     } finally {
@@ -38,12 +38,14 @@ export default function LoginPage({ onBack, onSignup, onLogin, continueWithBoard
 
     setResetLoading(true);
     try {
-      await supabase.auth.resetPasswordForEmail(resetEmail, {
-        redirectTo: `${window.location.origin}/reset-password`,
-      });
+      await sendPasswordResetEmail(auth, resetEmail);
       setResetNotice("Password reset request submitted. Check your inbox for a reset link.");
     } catch (resetError) {
-      setError(resetError.message || "Could not send a reset email right now. Please try again.");
+      if (resetError.code === 'auth/user-not-found') {
+        setResetNotice("Password reset request submitted. Check your inbox for a reset link.");
+      } else {
+        setError(resetError.message || "Could not send a reset email right now. Please try again.");
+      }
     } finally {
       setResetLoading(false);
     }
@@ -77,25 +79,28 @@ export default function LoginPage({ onBack, onSignup, onLogin, continueWithBoard
                   {resetLoading ? 'Sending...' : 'Forgot password?'}
                 </button>
               </div>
-              <input id="password" type={showPassword ? "text" : "password"} placeholder="Your password" className="password-input-no-native-reveal input input-bordered w-full pr-16 input-enhanced enhanced-focus" value={password} onChange={e => setPassword(e.target.value)} />
-              <span className="absolute right-3 top-8 flex items-center text-gray-400 cursor-pointer select-none" onClick={() => setShowPassword(v => !v)}>
-                {showPassword ? (
-                  // Eye-off icon (Heroicons outline)
-                  <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13.875 18.825A10.05 10.05 0 0112 19c-5.523 0-10-4.477-10-10 0-1.657.336-3.233.938-4.675" />
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 3l18 18" />
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17.94 17.94A10.05 10.05 0 0012 19c-5.523 0-10-4.477-10-10 0-1.657.336-3.233.938-4.675" />
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9.88 9.88a3 3 0 104.24 4.24" />
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" opacity="0.4" />
-                  </svg>
-                ) : (
-                  // Eye icon
-                  <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.477 0 8.268 2.943 9.542 7-1.274 4.057-5.065 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
-                  </svg>
-                )}
-              </span>
+              <div className="relative">
+                <input id="password" autoComplete="current-password" type={showPassword ? "text" : "password"} placeholder="Your password" className="password-input-no-native-reveal input input-bordered w-full pr-12 input-enhanced enhanced-focus" value={password} onChange={e => setPassword(e.target.value)} />
+                <button
+                  type="button"
+                  onMouseDown={(event) => event.preventDefault()}
+                  onClick={() => setShowPassword(v => !v)}
+                  className="absolute right-3 top-1/2 z-10 -translate-y-1/2 rounded bg-transparent p-1 text-gray-500 hover:bg-transparent active:bg-transparent hover:text-gray-800 focus-visible:outline focus-visible:outline-2 focus-visible:outline-indigo-600"
+                  aria-label={showPassword ? 'Hide password' : 'Show password'}
+                >
+                  {showPassword ? (
+                    <svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" className="h-5 w-5">
+                      <path strokeLinecap="round" strokeLinejoin="round" d="m3 3 18 18M10.6 10.6a2 2 0 0 0 2.8 2.8" />
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M9.9 5.2A10.8 10.8 0 0 1 12 5c5 0 8.5 4.2 9.5 6.1a1.8 1.8 0 0 1 0 1.8 12 12 0 0 1-3.1 3.5M6.2 6.2A13 13 0 0 0 2.5 11a1.8 1.8 0 0 0 0 1.8A10.8 10.8 0 0 0 12 19c.8 0 1.6-.1 2.3-.3" />
+                    </svg>
+                  ) : (
+                    <svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" className="h-5 w-5">
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M2.5 12s3.5-7 9.5-7 9.5 7 9.5 7-3.5 7-9.5 7-9.5-7-9.5-7Z" />
+                      <circle cx="12" cy="12" r="2.5" />
+                    </svg>
+                  )}
+                </button>
+              </div>
             </div>
             {resetNotice && <p className="text-sm text-green-700" role="status">{resetNotice}</p>}
             <button type="submit" className={`btn btn-primary w-full text-lg mt-2 button-press ${loading ? 'enhanced-button-loading' : ''}`} disabled={loading}>

@@ -18,6 +18,15 @@ body {
   display: none;
 }
 
+.password-input-no-native-reveal:-webkit-autofill,
+.password-input-no-native-reveal:-webkit-autofill:hover,
+.password-input-no-native-reveal:-webkit-autofill:focus,
+.password-input-no-native-reveal:-webkit-autofill:active {
+  -webkit-box-shadow: 0 0 0 1000px #fff inset;
+  -webkit-text-fill-color: #111827;
+  caret-color: #111827;
+}
+
 /* Logo font class */
 .font-logo {
   font-family: var(--font-logo);

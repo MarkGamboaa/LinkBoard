@@ -1,9 +1,9 @@
 import React, { useState, useEffect, useRef } from "react";
 import BrandLogo from "./BrandLogo";
-import { updateUserProfile, getUserProfile, uploadProfileImage, deleteProfileImage, changeUserPassword, validatePassword, deleteUserAccount } from "./auth";
+import { updateUserProfile, getUserProfile, uploadProfileImage, deleteProfileImage, changeUserPassword, validatePassword, deleteUserAccount } from "./firebase";
 import LoadingSpinner from "./components/LoadingSpinner.jsx";
 
-import { supabase, normalizeAuthUser } from "./supabase";
+import { auth } from "./firebase";
 export default function ProfilePage({ user, onBack, onLogout, onUserUpdate }) {
   const [menuOpen, setMenuOpen] = useState(false);
   const [editMode, setEditMode] = useState(false);
@@ -23,6 +23,7 @@ export default function ProfilePage({ user, onBack, onLogout, onUserUpdate }) {
   const [visiblePasswordFields, setVisiblePasswordFields] = useState({});
   const [changingPassword, setChangingPassword] = useState(false);
   const [passwordError, setPasswordError] = useState('');
+  const [passwordValidationAttempted, setPasswordValidationAttempted] = useState(false);
   const [deleteAccountModal, setDeleteAccountModal] = useState(false);
   const [deletePassword, setDeletePassword] = useState('');
   const [deletingAccount, setDeletingAccount] = useState(false);
@@ -33,6 +34,14 @@ export default function ProfilePage({ user, onBack, onLogout, onUserUpdate }) {
   const togglePasswordVisibility = (field) => {
     setVisiblePasswordFields((current) => ({ ...current, [field]: !current[field] }));
   };
+
+  const passwordRequirements = [
+    { label: 'At least 8 characters', met: newPassword.length >= 8 },
+    { label: 'At least 1 uppercase letter', met: /[A-Z]/.test(newPassword) },
+    { label: 'At least 1 special character', met: /[!@#$%^&*()_+\-=[\]{};':"\\|,.<>/?]/.test(newPassword) },
+  ];
+  const passwordsMatch = confirmPassword.length > 0 && newPassword === confirmPassword;
+  const passwordsDoNotMatch = confirmPassword.length > 0 && newPassword !== confirmPassword;
 
   // Debug logging for user prop changes
   useEffect(() => {
@@ -141,12 +150,11 @@ export default function ProfilePage({ user, onBack, onLogout, onUserUpdate }) {
         // Immediately update local state to show the change
         setLocalPhotoURL(result.url);
         // Reload the user to get the latest data
-        const { data: { user: freshUser } } = await supabase.auth.getUser();
-        const normalizedUser = normalizeAuthUser(freshUser);
+        await auth.currentUser.reload();
         // Small delay to ensure the update is complete
         await new Promise(resolve => setTimeout(resolve, 100));
         // Update the user state in the parent component
-        if (onUserUpdate) onUserUpdate(normalizedUser);
+        if (onUserUpdate) onUserUpdate(auth.currentUser);
         window.showToast('Profile image updated successfully!', 'success');
       } else {
         window.showToast('Failed to upload image: ' + result.message, 'error');
@@ -173,15 +181,14 @@ export default function ProfilePage({ user, onBack, onLogout, onUserUpdate }) {
         // Immediately update local state to show the change
         setLocalPhotoURL(null);
         // Reload the user to get the latest data
-        const { data: { user: freshUser } } = await supabase.auth.getUser();
-        const normalizedUser = normalizeAuthUser(freshUser);
-        console.log('After reload - user.photoURL:', normalizedUser.photoURL);
+        await auth.currentUser.reload();
+        console.log('After reload - auth.currentUser.photoURL:', auth.currentUser.photoURL);
         // Small delay to ensure the update is complete
         await new Promise(resolve => setTimeout(resolve, 100));
         // Update the user state in the parent component
         if (onUserUpdate) {
-          console.log('Calling onUserUpdate with:', normalizedUser);
-          onUserUpdate(normalizedUser);
+          console.log('Calling onUserUpdate with:', auth.currentUser);
+          onUserUpdate(auth.currentUser);
         }
         window.showToast('Profile image deleted successfully!', 'success');
       } else {
@@ -206,6 +213,7 @@ export default function ProfilePage({ user, onBack, onLogout, onUserUpdate }) {
     setNewPassword('');
     setConfirmPassword('');
     setPasswordError('');
+    setPasswordValidationAttempted(false);
   };
 
   const handleCancelChangePassword = () => {
@@ -214,11 +222,13 @@ export default function ProfilePage({ user, onBack, onLogout, onUserUpdate }) {
     setNewPassword('');
     setConfirmPassword('');
     setPasswordError('');
+    setPasswordValidationAttempted(false);
   };
 
   const handleSubmitChangePassword = async () => {
     // Clear previous errors
     setPasswordError('');
+    setPasswordValidationAttempted(true);
 
     // Validate inputs
     if (!currentPassword.trim()) {
@@ -227,24 +237,20 @@ export default function ProfilePage({ user, onBack, onLogout, onUserUpdate }) {
     }
 
     if (!newPassword.trim()) {
-      setPasswordError('Please enter a new password');
       return;
     }
 
     if (!confirmPassword.trim()) {
-      setPasswordError('Please confirm your new password');
       return;
     }
 
     if (newPassword !== confirmPassword) {
-      setPasswordError('New passwords do not match');
       return;
     }
 
     // Validate new password strength
     const validation = validatePassword(newPassword);
     if (!validation.valid) {
-      setPasswordError(validation.message);
       return;
     }
 
@@ -604,14 +610,14 @@ export default function ProfilePage({ user, onBack, onLogout, onUserUpdate }) {
                   <input
                     type={visiblePasswordFields.current ? 'text' : 'password'}
                     value={currentPassword}
-                    onChange={(e) => setCurrentPassword(e.target.value)}
+                    onChange={(e) => { setCurrentPassword(e.target.value); setPasswordError(''); }}
                     className="password-input-no-native-reveal input input-bordered w-full pr-12 text-sm sm:text-base"
                     placeholder="Enter current password"
                   />
                   <button
                     type="button"
                     onClick={() => togglePasswordVisibility('current')}
-                    className="absolute right-3 top-1/2 -translate-y-1/2 rounded p-1 text-gray-500 hover:bg-gray-100 hover:text-gray-800 focus-visible:outline focus-visible:outline-2 focus-visible:outline-indigo-600"
+                    className="absolute right-3 top-1/2 z-10 -translate-y-1/2 rounded bg-transparent p-1 text-gray-500 hover:bg-transparent active:bg-transparent hover:text-gray-800 focus-visible:outline focus-visible:outline-2 focus-visible:outline-indigo-600"
                     aria-label={visiblePasswordFields.current ? 'Hide current password' : 'Show current password'}
                     title={visiblePasswordFields.current ? 'Hide password' : 'Show password'}
                   >
@@ -638,14 +644,14 @@ export default function ProfilePage({ user, onBack, onLogout, onUserUpdate }) {
                   <input
                     type={visiblePasswordFields.new ? 'text' : 'password'}
                     value={newPassword}
-                    onChange={(e) => setNewPassword(e.target.value)}
+                    onChange={(e) => { setNewPassword(e.target.value); setPasswordError(''); }}
                     className="password-input-no-native-reveal input input-bordered w-full pr-12 text-sm sm:text-base"
                     placeholder="Enter new password"
                   />
                   <button
                     type="button"
                     onClick={() => togglePasswordVisibility('new')}
-                    className="absolute right-3 top-1/2 -translate-y-1/2 rounded p-1 text-gray-500 hover:bg-gray-100 hover:text-gray-800 focus-visible:outline focus-visible:outline-2 focus-visible:outline-indigo-600"
+                    className="absolute right-3 top-1/2 z-10 -translate-y-1/2 rounded bg-transparent p-1 text-gray-500 hover:bg-transparent active:bg-transparent hover:text-gray-800 focus-visible:outline focus-visible:outline-2 focus-visible:outline-indigo-600"
                     aria-label={visiblePasswordFields.new ? 'Hide new password' : 'Show new password'}
                     title={visiblePasswordFields.new ? 'Hide password' : 'Show password'}
                   >
@@ -662,9 +668,13 @@ export default function ProfilePage({ user, onBack, onLogout, onUserUpdate }) {
                     )}
                   </button>
                 </div>
-                <div className="text-xs text-gray-500 mt-1">
-                  Must be at least 8 characters with 1 uppercase letter and 1 special character
-                </div>
+                {(newPassword.length > 0 || passwordValidationAttempted) && passwordRequirements.some(({ met }) => !met) && (
+                  <ul className="mt-1 space-y-0.5 text-xs text-red-600" aria-live="polite" aria-label="Password requirements">
+                    {passwordRequirements.filter(({ met }) => !met).map(({ label }) => (
+                      <li key={label}>{label}</li>
+                    ))}
+                  </ul>
+                )}
               </div>
               
               <div>
@@ -675,14 +685,14 @@ export default function ProfilePage({ user, onBack, onLogout, onUserUpdate }) {
                   <input
                     type={visiblePasswordFields.confirm ? 'text' : 'password'}
                     value={confirmPassword}
-                    onChange={(e) => setConfirmPassword(e.target.value)}
+                    onChange={(e) => { setConfirmPassword(e.target.value); setPasswordError(''); }}
                     className="password-input-no-native-reveal input input-bordered w-full pr-12 text-sm sm:text-base"
                     placeholder="Confirm new password"
                   />
                   <button
                     type="button"
                     onClick={() => togglePasswordVisibility('confirm')}
-                    className="absolute right-3 top-1/2 -translate-y-1/2 rounded p-1 text-gray-500 hover:bg-gray-100 hover:text-gray-800 focus-visible:outline focus-visible:outline-2 focus-visible:outline-indigo-600"
+                    className="absolute right-3 top-1/2 z-10 -translate-y-1/2 rounded bg-transparent p-1 text-gray-500 hover:bg-transparent active:bg-transparent hover:text-gray-800 focus-visible:outline focus-visible:outline-2 focus-visible:outline-indigo-600"
                     aria-label={visiblePasswordFields.confirm ? 'Hide confirmation password' : 'Show confirmation password'}
                     title={visiblePasswordFields.confirm ? 'Hide password' : 'Show password'}
                   >
@@ -699,6 +709,12 @@ export default function ProfilePage({ user, onBack, onLogout, onUserUpdate }) {
                     )}
                   </button>
                 </div>
+                {passwordsDoNotMatch && (
+                  <p className="mt-1 text-xs text-red-600" role="status" aria-live="polite">Passwords do not match.</p>
+                )}
+                {passwordsMatch && (
+                  <p className="mt-1 text-xs text-green-700" role="status" aria-live="polite">Passwords match.</p>
+                )}
               </div>
             </div>
 

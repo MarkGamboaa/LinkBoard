@@ -4,7 +4,7 @@ import LinkCard from "./LinkCard";
 import Masonry from "react-masonry-css";
 import LoadingSpinner from "./components/LoadingSpinner.jsx";
 import ProfilePage from "./ProfilePage.jsx";
-import { apiFetch, getUserProfile } from "./auth";
+import { apiFetch, getUserProfile } from "./firebase";
 import { BOARD_TEMPLATES } from "./data/boardTemplates";
 import { fetchLinkPreview } from "./utils/linkPreview";
 
@@ -39,6 +39,7 @@ const removeGeneratedCopySuffix = async (board) => {
 export default function DashboardPage({ onLogout, user: initialUser, onProfile, onPublic, pendingBoardCopyId = null, onPendingBoardCopyHandled }) {
   const [user, setUser] = useState(initialUser);
   const [userProfile, setUserProfile] = useState(null);
+  const [userProfileLoading, setUserProfileLoading] = useState(true);
   const [menuOpen, setMenuOpen] = useState(false);
   const [boards, setBoards] = useState([]);
   const [modalOpen, setModalOpen] = useState(false);
@@ -95,11 +96,32 @@ export default function DashboardPage({ onLogout, user: initialUser, onProfile, 
     768: 1
   };
 
-  // Fetch user profile and boards
+  // Fetch user profile and boards. A new account's profile can still be saving
+  // when Firebase first routes it to the dashboard, so retry a brief 404.
   useEffect(() => {
-    fetchUserProfile();
+    let cancelled = false;
+    const loadUserProfile = async () => {
+      try {
+        for (let attempt = 0; attempt < 12; attempt += 1) {
+          const result = await getUserProfile();
+          if (result.success) {
+            if (!cancelled) setUserProfile(result.data);
+            return;
+          }
+          if (result.message !== 'User profile not found' || attempt === 11) return;
+          await new Promise((resolve) => window.setTimeout(resolve, 250));
+        }
+      } catch (error) {
+        console.error('Error loading user profile:', error);
+      } finally {
+        if (!cancelled) setUserProfileLoading(false);
+      }
+    };
+
+    loadUserProfile();
     fetchBoards();
-  }, []);
+    return () => { cancelled = true; };
+  }, [initialUser?.uid]);
 
   useEffect(() => {
     if (!pendingBoardCopyId || loading || handledBoardCopies.current.has(pendingBoardCopyId)) return;
@@ -122,19 +144,9 @@ export default function DashboardPage({ onLogout, user: initialUser, onProfile, 
     copyPendingBoard();
   }, [pendingBoardCopyId, loading]);
 
-  const fetchUserProfile = async () => {
-    try {
-      const result = await getUserProfile();
-      if (result.success) {
-        setUserProfile(result.data);
-      }
-    } catch (error) {
-      console.error('Error loading user profile:', error);
-    }
-  };
-
   // Show the nickname in the dashboard greeting without exposing a real name.
   const getUserNickname = () => {
+    if (userProfileLoading) return '…';
     return userProfile?.nickname || 'User';
   };
 
