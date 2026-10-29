@@ -89,17 +89,16 @@ export default function SignupPage({ onBack, onLogin, continueWithBoardCopy = fa
             <div className="w-16 h-16 mx-auto mb-4 flex items-center justify-center">
               <img src={LinkBoardLogo} alt="LinkBoard Logo" className="w-full h-full object-contain" />
             </div>
-            <div className="flex justify-between items-center mb-6">
+            <div className="mb-6">
               <h2 className="text-xl sm:text-2xl font-bold">Create an account</h2>
-              <button className="underline text-sm" onClick={onLogin}>log in instead</button>
             </div>
             {continueWithBoardCopy && <p className="-mt-4 mb-4 text-sm text-gray-600">Create your account and we’ll add that public board to your private boards.</p>}
             <form className="flex flex-col gap-4" onSubmit={handleSubmit}>
-              <input type="text" placeholder="First name" className="input input-bordered w-full input-enhanced enhanced-focus" value={firstName} onChange={e => setFirstName(e.target.value)} />
-              <input type="text" placeholder="Last name" className="input input-bordered w-full input-enhanced enhanced-focus" value={lastName} onChange={e => setLastName(e.target.value)} />
               <div>
                 <input type="text" placeholder="Nickname" maxLength={24} className="input input-bordered w-full input-enhanced enhanced-focus" value={nickname} onChange={e => setNickname(e.target.value)} />
               </div>
+              <input type="text" placeholder="First name" className="input input-bordered w-full input-enhanced enhanced-focus" value={firstName} onChange={e => setFirstName(e.target.value)} />
+              <input type="text" placeholder="Last name" className="input input-bordered w-full input-enhanced enhanced-focus" value={lastName} onChange={e => setLastName(e.target.value)} />
               <input type="email" placeholder="Email" className="input input-bordered w-full input-enhanced enhanced-focus" value={email} onChange={e => setEmail(e.target.value)} />
               <div>
                 <input type="password" placeholder="Password" className="input input-bordered w-full input-enhanced enhanced-focus" value={password} onChange={e => setPassword(e.target.value)} />
@@ -117,6 +116,9 @@ export default function SignupPage({ onBack, onLogin, continueWithBoardCopy = fa
                   "Create account"
                 )}
               </button>
+              <div className="-mt-2 text-center">
+                <button type="button" className="underline text-sm" onClick={onLogin}>log in instead</button>
+              </div>
               {error && <div className="text-red-500 text-sm mt-2">{error}</div>}
               {success && <div className="text-green-600 text-sm mt-2">{success}</div>}
             </form>

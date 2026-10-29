@@ -79,6 +79,9 @@ export default function DashboardPage({ onLogout, user: initialUser, onProfile, 
   const [leaveBoardError, setLeaveBoardError] = useState('');
   const [leavingBoard, setLeavingBoard] = useState(false);
   const handledBoardCopies = useRef(new Set());
+  const boardViewportRef = useRef(null);
+  const [hasBoardOverflow, setHasBoardOverflow] = useState(false);
+  const [hasScrolledBoards, setHasScrolledBoards] = useState(false);
 
   // Dynamically set columns based on number of boards
   const maxCols = 4;
@@ -580,6 +583,34 @@ export default function DashboardPage({ onLogout, user: initialUser, onProfile, 
       ...(link.tags || []),
     ].some((value) => String(value || '').toLowerCase().includes(normalizedSearch)));
   });
+
+  useEffect(() => {
+    const viewport = boardViewportRef.current;
+    const masonry = viewport?.querySelector('.dashboard-masonry-grid');
+    if (!viewport || !masonry) {
+      setHasBoardOverflow(false);
+      return;
+    }
+
+    const updateOverflow = () => {
+      setHasBoardOverflow(viewport.scrollHeight > viewport.clientHeight + 1);
+      setHasScrolledBoards(viewport.scrollTop > 1);
+    };
+    const updateScroll = () => setHasScrolledBoards(viewport.scrollTop > 1);
+    updateOverflow();
+    updateScroll();
+    const observer = new ResizeObserver(updateOverflow);
+    observer.observe(viewport);
+    observer.observe(masonry);
+    viewport.addEventListener('scroll', updateScroll, { passive: true });
+    window.addEventListener('resize', updateOverflow);
+
+    return () => {
+      observer.disconnect();
+      viewport.removeEventListener('scroll', updateScroll);
+      window.removeEventListener('resize', updateOverflow);
+    };
+  }, [visibleBoards.length]);
   const selectedBoard = boards.find((board) => board._id === selectedBoardId) || null;
   const selectedBoardIndex = selectedBoard ? boards.findIndex((board) => board._id === selectedBoard._id) : -1;
   const selectedBoardTemplate = BOARD_TEMPLATES.find((item) => item.id === newBoardTemplateId) || BOARD_TEMPLATES[0];
@@ -654,7 +685,7 @@ export default function DashboardPage({ onLogout, user: initialUser, onProfile, 
           <ProfilePage user={user} onBack={() => setUser(u => ({ ...u, showProfile: false }))} onUserUpdate={setUser} />
         ) : (
         <main className="flex-1 flex flex-col items-center justify-start px-2 sm:px-6">
-          <div className="w-full h-[calc(100vh-120px)] sm:h-[calc(100vh-115px)] max-h-full sm:max-h-[900px] flex flex-col justify-start items-center p-1 sm:p-8 pt-4 overflow-y-auto">
+          <div ref={boardViewportRef} className={`w-full h-[calc(100vh-100px)] sm:h-[calc(100vh-80px)] max-h-full sm:max-h-[960px] flex flex-col justify-start items-center p-1 sm:p-8 pt-4 overflow-y-auto ${hasBoardOverflow ? 'dashboard-board-viewport-fade' : ''} ${hasScrolledBoards ? 'dashboard-board-top-fade' : ''}`}>
           <div className="w-full max-w-3xl mb-5 flex items-center justify-center gap-3">
             <label className="sr-only" htmlFor="board-link-search">Search boards and links</label>
             <input
@@ -680,7 +711,7 @@ export default function DashboardPage({ onLogout, user: initialUser, onProfile, 
           {/* Boards List */}
                       <Masonry
               breakpointCols={breakpointColumnsObj}
-              className="dashboard-masonry-grid w-full mb-4 overflow-y-auto overflow-x-hidden"
+              className="dashboard-masonry-grid w-full mb-4"
               columnClassName="dashboard-masonry-grid_column"
             >
             {visibleBoards.map(({ board, index: idx }) => (

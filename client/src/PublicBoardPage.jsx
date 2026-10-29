@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import LinkCard from "./LinkCard";
 import Masonry from "react-masonry-css";
 import LoadingSpinner from "./components/LoadingSpinner.jsx";
@@ -10,6 +10,9 @@ export default function PublicBoardPage({ onLogin, onSignup, onBackToDashboard, 
   const [loading, setLoading] = useState(true);
   const [copyingBoardId, setCopyingBoardId] = useState(null);
   const [copiedBoardIds, setCopiedBoardIds] = useState(() => new Set());
+  const boardViewportRef = useRef(null);
+  const [hasBoardOverflow, setHasBoardOverflow] = useState(false);
+  const [hasScrolledBoards, setHasScrolledBoards] = useState(false);
 
   // Dynamically set columns based on number of boards
   const maxCols = 4;
@@ -25,6 +28,34 @@ export default function PublicBoardPage({ onLogin, onSignup, onBackToDashboard, 
   useEffect(() => {
     fetchPublicBoards();
   }, []);
+
+  useEffect(() => {
+    const viewport = boardViewportRef.current;
+    const masonry = viewport?.querySelector('.public-masonry-grid');
+    if (!viewport || !masonry) {
+      setHasBoardOverflow(false);
+      setHasScrolledBoards(false);
+      return;
+    }
+
+    const updateOverflow = () => {
+      setHasBoardOverflow(viewport.scrollHeight > viewport.clientHeight + 1);
+      setHasScrolledBoards(viewport.scrollTop > 1);
+    };
+    const updateScroll = () => setHasScrolledBoards(viewport.scrollTop > 1);
+    updateOverflow();
+    const observer = new ResizeObserver(updateOverflow);
+    observer.observe(viewport);
+    observer.observe(masonry);
+    viewport.addEventListener('scroll', updateScroll, { passive: true });
+    window.addEventListener('resize', updateOverflow);
+
+    return () => {
+      observer.disconnect();
+      viewport.removeEventListener('scroll', updateScroll);
+      window.removeEventListener('resize', updateOverflow);
+    };
+  }, [publicBoards.length]);
 
   const fetchPublicBoards = async () => {
     try {
@@ -131,7 +162,7 @@ export default function PublicBoardPage({ onLogin, onSignup, onBackToDashboard, 
         </header>
 
         <main className="flex-1 flex flex-col items-center justify-start px-2 sm:px-6">
-          <div className="w-full h-[calc(100vh-120px)] sm:h-[calc(100vh-115px)] max-h-full sm:max-h-[900px] flex flex-col justify-start items-center p-1 sm:p-8 pt-4 overflow-y-auto">
+          <div ref={boardViewportRef} className={`w-full h-[calc(100vh-120px)] sm:h-[calc(100vh-115px)] max-h-full sm:max-h-[900px] flex flex-col justify-start items-center p-1 sm:p-8 pt-4 overflow-y-auto ${hasBoardOverflow ? 'dashboard-board-viewport-fade' : ''} ${hasScrolledBoards ? 'dashboard-board-top-fade' : ''}`}>
             {publicBoards.length === 0 ? (
               <div className="flex flex-col items-center justify-center h-full text-center">
                 <h2 className="text-2xl font-bold text-gray-700 mb-4">No Public Boards Available</h2>
@@ -154,7 +185,7 @@ export default function PublicBoardPage({ onLogin, onSignup, onBackToDashboard, 
                 {/* Public Boards List */}
                 <Masonry
                   breakpointCols={breakpointColumnsObj}
-                  className="public-masonry-grid w-full mb-4 overflow-y-auto overflow-x-hidden"
+                  className="public-masonry-grid w-full mb-4"
                   columnClassName="public-masonry-grid_column"
                 >
                   {publicBoards.map((board, idx) => (
