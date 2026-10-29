@@ -51,7 +51,12 @@ export default function SignupPage({ onBack, onLogin, continueWithBoardCopy = fa
       setSuccess(verificationMessage);
       setFirstName(""); setLastName(""); setNickname(""); setEmail(""); setPassword("");
     } catch (err) {
-      setError(err.message);
+      const signupErrorMessages = {
+        'auth/email-already-in-use': 'Email is already in use.',
+        'auth/invalid-email': 'Enter a valid email address.',
+        'auth/network-request-failed': 'Could not connect. Check your connection and try again.',
+      };
+      setError(signupErrorMessages[err.code] || 'Could not create your account. Please try again.');
     } finally {
       setLoading(false);
     }
