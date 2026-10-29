@@ -1,7 +1,7 @@
 import React, { useState } from "react";
 import { signInWithEmailAndPassword } from "firebase/auth";
 import { auth } from "./firebase";
-import LinkBoardLogo from "./assets/linkboardlogo.svg";
+import LinkBoardLogo from "./assets/linkboard-mark.svg";
 
 export default function LoginPage({ onBack, onSignup, onLogin, continueWithBoardCopy = false }) {
   const [showPassword, setShowPassword] = useState(false);

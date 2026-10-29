@@ -1,4 +1,5 @@
 import React, { useEffect, useState } from 'react';
+import BrandLogo from './BrandLogo';
 import { sendEmailVerification, reload } from 'firebase/auth';
 import { apiFetch, auth } from './firebase';
 import { getApiUrl } from './utils/api';
@@ -66,7 +67,7 @@ export default function BoardInvitePage({ token, user, onLogin, onSignup, onSwit
   return (
     <main className="min-h-screen flex items-center justify-center bg-gradient-to-br from-[#e3efff] to-[#b3d0f7] p-4">
       <section className="bg-white rounded-2xl shadow-xl p-8 w-full max-w-lg flex flex-col gap-4">
-        <h1 className="text-2xl font-bold text-primary font-logo">LinkBoard</h1>
+        <h1><BrandLogo textClassName="text-2xl" /></h1>
         {loading ? <p>Loading invite…</p> : invite ? (
           <>
             <h2 className="text-xl font-semibold">You’re invited to collaborate</h2>

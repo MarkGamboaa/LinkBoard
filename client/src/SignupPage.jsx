@@ -1,7 +1,8 @@
 import React, { useState } from "react";
+import BrandLogo from "./BrandLogo";
 import { createUserWithEmailAndPassword, sendEmailVerification, updateProfile } from "firebase/auth";
 import { auth, validatePassword, updateUserProfile } from "./firebase";
-import LinkBoardLogo from "./assets/linkboardlogo.svg";
+import LinkBoardLogo from "./assets/linkboard-mark.svg";
 
 export default function SignupPage({ onBack, onLogin, continueWithBoardCopy = false }) {
   const [firstName, setFirstName] = useState("");
@@ -77,7 +78,7 @@ export default function SignupPage({ onBack, onLogin, continueWithBoardCopy = fa
         {/* Left Section (h1 and p) */}
         <div className="w-full lg:w-1/2 flex flex-col justify-center items-center lg:items-end pr-0 text-center lg:text-right mb-8 lg:mb-0">
           <h1 className="text-3xl sm:text-4xl md:text-5xl font-black leading-tight mb-4">
-                            Join <span className="text-primary font-logo">LinkBoard</span> and<br />start organizing smarter
+                            Join <BrandLogo showMark={false} textClassName="text-[1em]" weightClassName="font-black" /> and<br />start organizing smarter
           </h1>
           <p className="text-base sm:text-lg text-gray-700 max-w-md">
             Sign up in seconds. Save links, create boards, and take control of your digital space all in one place.
