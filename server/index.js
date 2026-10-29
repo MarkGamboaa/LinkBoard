@@ -217,7 +217,17 @@ app.get('/api/boards/public', async () => {
     include: { links: { orderBy: { position: 'asc' } } },
     orderBy: { createdAt: 'desc' },
   });
-  return boards.map((board) => serializeBoard(board));
+  const ownerProfiles = await prisma.userProfile.findMany({
+    where: { firebaseUid: { in: [...new Set(boards.map((board) => board.ownerUid))] } },
+    select: { firebaseUid: true, nickname: true },
+  });
+  const ownerNicknames = new Map(ownerProfiles.map((profile) => [profile.firebaseUid, profile.nickname?.trim()]));
+  return boards.map((board) => ({
+    _id: board.id,
+    title: board.title,
+    ownerNickname: ownerNicknames.get(board.ownerUid) || 'LinkBoard user',
+    links: (board.links || []).map(serializeLink),
+  }));
 });
 
 app.post('/api/boards/:id/copy', async (request, reply) => {
@@ -470,8 +480,14 @@ app.get('/api/profile', async (request, reply) => {
 app.post('/api/profile', async (request, reply) => {
   const firstName = String(request.body?.firstName || '').trim();
   const lastName = String(request.body?.lastName || '').trim();
+  const nickname = request.body?.nickname === undefined
+    ? undefined
+    : String(request.body.nickname || '').trim();
   if (!firstName || !lastName) {
     return reply.code(400).send({ error: 'First name and last name are required' });
+  }
+  if (nickname !== undefined && (nickname.length < 2 || nickname.length > 24)) {
+    return reply.code(400).send({ error: 'Nickname must be between 2 and 24 characters' });
   }
 
   const displayName = `${firstName} ${lastName}`;
@@ -482,12 +498,14 @@ app.post('/api/profile', async (request, reply) => {
       email: request.user.email,
       firstName,
       lastName,
+      nickname: nickname ?? null,
       displayName,
     },
     update: {
       email: request.user.email,
       firstName,
       lastName,
+      ...(nickname !== undefined ? { nickname } : {}),
       displayName,
       updatedAt: new Date(),
     },

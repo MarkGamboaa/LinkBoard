@@ -8,12 +8,14 @@ export default function ProfilePage({ user, onBack, onLogout, onUserUpdate }) {
   const [editMode, setEditMode] = useState(false);
   const [firstName, setFirstName] = useState('');
   const [lastName, setLastName] = useState('');
+  const [nickname, setNickname] = useState('');
   const [isUpdating, setIsUpdating] = useState(false);
   const [userProfile, setUserProfile] = useState(null);
   const [loading, setLoading] = useState(true);
   const [uploadingImage, setUploadingImage] = useState(false);
   const [localPhotoURL, setLocalPhotoURL] = useState(user?.photoURL);
   const [changePasswordModal, setChangePasswordModal] = useState(false);
+  const [deleteImageModal, setDeleteImageModal] = useState(false);
   const [currentPassword, setCurrentPassword] = useState('');
   const [newPassword, setNewPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
@@ -47,11 +49,13 @@ export default function ProfilePage({ user, onBack, onLogout, onUserUpdate }) {
           setUserProfile(result.data);
           setFirstName(result.data.firstName || '');
           setLastName(result.data.lastName || '');
+          setNickname(result.data.nickname || '');
         } else {
           // Fall back to Firebase Auth displayName if no profile is saved.
           const displayNameParts = user?.displayName?.split(' ') || [];
           setFirstName(displayNameParts[0] || '');
           setLastName(displayNameParts.slice(1).join(' ') || '');
+          setNickname('');
         }
       } catch (error) {
         console.error('Error loading user profile:', error);
@@ -59,6 +63,7 @@ export default function ProfilePage({ user, onBack, onLogout, onUserUpdate }) {
         const displayNameParts = user?.displayName?.split(' ') || [];
         setFirstName(displayNameParts[0] || '');
         setLastName(displayNameParts.slice(1).join(' ') || '');
+        setNickname('');
       } finally {
         setLoading(false);
       }
@@ -78,10 +83,14 @@ export default function ProfilePage({ user, onBack, onLogout, onUserUpdate }) {
       window.showToast('Please enter both first name and last name', 'error');
       return;
     }
+    if (nickname.trim().length < 2 || nickname.trim().length > 24) {
+      window.showToast('Nickname must be between 2 and 24 characters', 'error');
+      return;
+    }
 
     setIsUpdating(true);
     try {
-      const result = await updateUserProfile(firstName.trim(), lastName.trim());
+      const result = await updateUserProfile(firstName.trim(), lastName.trim(), nickname.trim());
       if (result.success) {
         setEditMode(false);
         // Refresh the profile data
@@ -103,8 +112,9 @@ export default function ProfilePage({ user, onBack, onLogout, onUserUpdate }) {
   const handleCancelEdit = () => {
     setEditMode(false);
     const displayNameParts = user?.displayName?.split(' ') || [];
-    setFirstName(displayNameParts[0] || '');
-    setLastName(displayNameParts.slice(1).join(' ') || '');
+    setFirstName(userProfile?.firstName || displayNameParts[0] || '');
+    setLastName(userProfile?.lastName || displayNameParts.slice(1).join(' ') || '');
+    setNickname(userProfile?.nickname || '');
   };
 
   const handleImageUpload = async (event) => {
@@ -146,16 +156,18 @@ export default function ProfilePage({ user, onBack, onLogout, onUserUpdate }) {
     }
   };
 
-  const handleDeleteImage = async () => {
-    if (!user.photoURL) return;
-    if (!confirm('Are you sure you want to delete your profile image?')) return;
-    
+  const handleDeleteImage = () => {
+    if (localPhotoURL) setDeleteImageModal(true);
+  };
+
+  const handleConfirmDeleteImage = async () => {
     console.log('Before delete - user.photoURL:', user.photoURL);
     setUploadingImage(true);
     try {
       const result = await deleteProfileImage();
       console.log('Delete result:', result);
       if (result.success) {
+        setDeleteImageModal(false);
         // Immediately update local state to show the change
         setLocalPhotoURL(null);
         // Reload the user to get the latest data
@@ -178,6 +190,11 @@ export default function ProfilePage({ user, onBack, onLogout, onUserUpdate }) {
     } finally {
       setUploadingImage(false);
     }
+  };
+
+  const handleCancelDeleteImage = () => {
+    if (uploadingImage) return;
+    setDeleteImageModal(false);
   };
 
   const handleChangePassword = () => {
@@ -438,112 +455,103 @@ export default function ProfilePage({ user, onBack, onLogout, onUserUpdate }) {
               </div>
               
               <div>
-                <h2 className="text-xl sm:text-2xl font-bold text-gray-800">
-                  {userProfile ? `${userProfile.firstName} ${userProfile.lastName}` : user?.displayName || 'User'}
-                </h2>
-                <p className="text-sm sm:text-base text-gray-600 break-all">{user?.email}</p>
+                {editMode ? (
+                  <input
+                    type="text"
+                    value={nickname}
+                    maxLength={24}
+                    onChange={(e) => setNickname(e.target.value)}
+                    className="input input-bordered input-sm w-full max-w-xs text-lg font-bold"
+                    placeholder="Nickname"
+                    aria-label="Public nickname"
+                  />
+                ) : (
+                  <h2 className="text-xl sm:text-2xl font-bold text-gray-800">
+                    {userProfile?.nickname || 'Nickname not set'}
+                  </h2>
+                )}
+              </div>
+              <div className="flex items-center gap-2 sm:ml-auto">
+                {editMode && (
+                  <button
+                    className="btn btn-ghost btn-sm"
+                    onClick={handleCancelEdit}
+                    disabled={isUpdating}
+                  >
+                    Cancel
+                  </button>
+                )}
+                <button
+                  className="btn btn-primary btn-sm"
+                  onClick={editMode ? handleSaveProfile : handleEditProfile}
+                  disabled={isUpdating}
+                >
+                  {editMode ? (isUpdating ? 'Saving...' : 'Save') : 'Edit'}
+                </button>
               </div>
             </div>
 
             {/* Profile Information */}
-            <div className="grid grid-cols-1 items-start gap-4 sm:gap-6 lg:grid-cols-2">
+            <div className="grid grid-cols-1 items-start gap-4 sm:gap-6">
               <div className="card bg-white/80 backdrop-blur">
                 <div className="card-body p-4 sm:p-6">
                   <h3 className="card-title col-span-full text-base sm:text-lg font-semibold">Account Information</h3>
                   <div className="grid grid-cols-1 gap-x-6 gap-y-3 sm:grid-cols-2">
-                    {editMode ? (
-                      <>
-                        <div className="flex min-w-0 flex-col gap-1">
-                          <span className="font-medium text-gray-700 text-sm sm:text-base">First Name:</span>
-                          <input
-                            type="text"
-                            value={firstName}
-                            onChange={(e) => setFirstName(e.target.value)}
-                            className="input input-bordered input-sm w-full"
-                            placeholder="First Name"
-                          />
-                        </div>
-                        <div className="flex min-w-0 flex-col gap-1">
-                          <span className="font-medium text-gray-700 text-sm sm:text-base">Last Name:</span>
-                          <input
-                            type="text"
-                            value={lastName}
-                            onChange={(e) => setLastName(e.target.value)}
-                            className="input input-bordered input-sm w-full"
-                            placeholder="Last Name"
-                          />
-                        </div>
-                        <div className="col-span-full flex gap-2 justify-end mt-2">
-                          <button 
-                            className="btn btn-sm btn-ghost" 
-                            onClick={handleCancelEdit}
-                            disabled={isUpdating}
-                          >
-                            Cancel
-                          </button>
-                          <button 
-                            className="btn btn-sm btn-primary" 
-                            onClick={handleSaveProfile}
-                            disabled={isUpdating}
-                          >
-                            {isUpdating ? 'Saving...' : 'Save'}
-                          </button>
-                        </div>
-                      </>
-                    ) : (
-                      <>
-                        <div className="flex min-w-0 flex-col gap-1">
-                          <span className="font-medium text-gray-700 text-sm sm:text-base">First Name:</span>
-                          <span className="text-gray-900 text-sm sm:text-base break-all">{userProfile?.firstName || user?.displayName?.split(' ')[0] || 'Not set'}</span>
-                        </div>
-                        <div className="flex min-w-0 flex-col gap-1">
-                          <span className="font-medium text-gray-700 text-sm sm:text-base">Last Name:</span>
-                          <span className="text-gray-900 text-sm sm:text-base break-all">{userProfile?.lastName || user?.displayName?.split(' ').slice(1).join(' ') || 'Not set'}</span>
-                        </div>
-                      </>
-                    )}
                     <div className="flex min-w-0 flex-col gap-1">
-                      <span className="font-medium text-gray-700 text-sm sm:text-base">Email:</span>
-                      <span className="text-gray-900 text-sm sm:text-base break-all">{user?.email}</span>
+                      <label htmlFor="profile-first-name" className="font-medium text-gray-700 text-sm sm:text-base">First Name:</label>
+                      <input
+                        id="profile-first-name"
+                        type="text"
+                        value={firstName}
+                        onChange={(e) => setFirstName(e.target.value)}
+                        readOnly={!editMode}
+                        className={`input input-bordered w-full text-base ${editMode ? 'bg-white' : 'bg-gray-50'}`}
+                        placeholder="First Name"
+                      />
                     </div>
                     <div className="flex min-w-0 flex-col gap-1">
-                      <span className="font-medium text-gray-700 text-sm sm:text-base">Account Created:</span>
-                      <span className="text-gray-900 text-sm sm:text-base">
-                        {user?.metadata?.creationTime ? 
-                          new Date(user.metadata.creationTime).toLocaleDateString() : 
-                          'Unknown'}
-                      </span>
+                      <label htmlFor="profile-last-name" className="font-medium text-gray-700 text-sm sm:text-base">Last Name:</label>
+                      <input
+                        id="profile-last-name"
+                        type="text"
+                        value={lastName}
+                        onChange={(e) => setLastName(e.target.value)}
+                        readOnly={!editMode}
+                        className={`input input-bordered w-full text-base ${editMode ? 'bg-white' : 'bg-gray-50'}`}
+                        placeholder="Last Name"
+                      />
                     </div>
                     <div className="flex min-w-0 flex-col gap-1">
-                      <span className="font-medium text-gray-700 text-sm sm:text-base">Last Sign In:</span>
-                      <span className="text-gray-900 text-sm sm:text-base">
-                        {user?.metadata?.lastSignInTime ? 
-                          new Date(user.metadata.lastSignInTime).toLocaleDateString() : 
-                          'Unknown'}
-                      </span>
+                      <label htmlFor="profile-email" className="font-medium text-gray-700 text-sm sm:text-base">Email:</label>
+                      <input
+                        id="profile-email"
+                        type="email"
+                        value={user?.email || ''}
+                        readOnly
+                        className="input input-bordered w-full text-base bg-gray-50"
+                      />
+                    </div>
+                    <div className="flex min-w-0 flex-col gap-1">
+                      <label htmlFor="profile-account-created" className="font-medium text-gray-700 text-sm sm:text-base">Account Created:</label>
+                      <input
+                        id="profile-account-created"
+                        type="text"
+                        value={user?.metadata?.creationTime ? new Date(user.metadata.creationTime).toLocaleDateString() : 'Unknown'}
+                        readOnly
+                        className="input input-bordered w-full text-base bg-gray-50"
+                      />
                     </div>
                   </div>
                 </div>
               </div>
 
               {/* Account Actions */}
-              <div className="space-y-4">
               <div className="card bg-white/80 backdrop-blur">
-                <div className="p-3 sm:p-4 space-y-2">
+                <div className="p-4 sm:p-6 space-y-3">
                   <h3 className="card-title text-base sm:text-lg font-semibold">Account Actions</h3>
-                  <div className="grid grid-cols-1 gap-2 xl:grid-cols-2">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                     <button 
                       className="btn btn-outline btn-primary min-w-0 whitespace-nowrap text-sm sm:text-base" 
-                      onClick={handleEditProfile}
-                      disabled={editMode}
-                    >
-                      <svg className="w-4 h-4 sm:w-5 sm:h-5 mr-1 sm:mr-2" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
-                      </svg>
-                      Edit Profile
-                    </button>
-                    <button 
-                      className="btn btn-outline btn-secondary min-w-0 whitespace-nowrap text-sm sm:text-base" 
                       onClick={handleChangePassword}
                     >
                       <svg className="w-4 h-4 sm:w-5 sm:h-5 mr-1 sm:mr-2" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
@@ -551,13 +559,6 @@ export default function ProfilePage({ user, onBack, onLogout, onUserUpdate }) {
                       </svg>
                       Change Password
                     </button>
-                  </div>
-                </div>
-              </div>
-
-              {/* Delete Account */}
-              <div className="card bg-white/80 backdrop-blur">
-                <div className="p-3 sm:p-4">
                   <button 
                     className="btn btn-error w-full text-sm sm:text-base" 
                     onClick={handleDeleteAccount}
@@ -567,8 +568,8 @@ export default function ProfilePage({ user, onBack, onLogout, onUserUpdate }) {
                     </svg>
                     Delete Account
                   </button>
+                  </div>
                 </div>
-              </div>
               </div>
             </div>
           </div>
@@ -715,6 +716,37 @@ export default function ProfilePage({ user, onBack, onLogout, onUserUpdate }) {
               </button>
             </div>
           </div>
+        </div>
+      )}
+
+      {/* Remove Profile Picture Modal */}
+      {deleteImageModal && (
+        <div className="fixed inset-0 flex items-center justify-center bg-black/20 backdrop-blur-sm z-50 p-4">
+          <section
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="delete-profile-image-title"
+            className="bg-white rounded-lg p-4 sm:p-6 shadow-lg flex flex-col gap-4 w-full max-w-md"
+          >
+            <h2 id="delete-profile-image-title" className="text-lg font-bold text-gray-900">Remove Profile Picture</h2>
+            <p className="text-sm text-gray-600">Are you sure you want to delete your profile picture?</p>
+            <div className="flex flex-col sm:flex-row gap-2 justify-end">
+              <button
+                className="btn btn-ghost text-sm sm:text-base"
+                onClick={handleCancelDeleteImage}
+                disabled={uploadingImage}
+              >
+                Cancel
+              </button>
+              <button
+                className="btn btn-error text-sm sm:text-base"
+                onClick={handleConfirmDeleteImage}
+                disabled={uploadingImage}
+              >
+                {uploadingImage ? 'Removing...' : 'Remove Picture'}
+              </button>
+            </div>
+          </section>
         </div>
       )}
 

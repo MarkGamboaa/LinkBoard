@@ -89,7 +89,7 @@ export const deleteProfileImage = async () => {
 };
 
 // Utility function to update user profile through the authenticated API
-export const updateUserProfile = async (firstName, lastName) => {
+export const updateUserProfile = async (firstName, lastName, nickname) => {
   try {
     const user = auth.currentUser;
     if (!user) {
@@ -104,7 +104,8 @@ export const updateUserProfile = async (firstName, lastName) => {
       },
       body: JSON.stringify({
         firstName: firstName.trim(),
-        lastName: lastName.trim()
+        lastName: lastName.trim(),
+        ...(nickname !== undefined ? { nickname: nickname.trim() } : {})
       })
     });
 

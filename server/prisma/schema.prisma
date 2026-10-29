@@ -72,6 +72,7 @@ model UserProfile {
   email       String?
   firstName   String
   lastName    String
+  nickname    String?
   displayName String
   updatedAt   DateTime @updatedAt
 }

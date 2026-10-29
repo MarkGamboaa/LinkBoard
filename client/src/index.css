@@ -67,6 +67,44 @@ body {
   margin-bottom: 16px;
 }
 
+.dashboard-masonry-grid {
+  display: flex;
+  flex-wrap: nowrap;
+  justify-content: center;
+  margin-left: -16px;
+  width: calc(100% + 16px);
+}
+
+.dashboard-masonry-grid_column {
+  flex: 0 0 336px !important;
+  width: 336px !important;
+  padding-left: 16px;
+  background-clip: padding-box;
+}
+
+.dashboard-masonry-grid_column > div {
+  margin-bottom: 16px;
+}
+
+.public-masonry-grid {
+  display: flex;
+  flex-wrap: nowrap;
+  justify-content: center;
+  margin-left: -16px;
+  width: calc(100% + 16px);
+}
+
+.public-masonry-grid_column {
+  flex: 0 0 336px !important;
+  width: 336px !important;
+  padding-left: 16px;
+  background-clip: padding-box;
+}
+
+.public-masonry-grid_column > div {
+  margin-bottom: 16px;
+}
+
 /* Drag and Drop Styles - Mobile-like sliding animations */
 .draggable-board {
   transition: all 0.4s cubic-bezier(0.25, 0.46, 0.45, 0.94);

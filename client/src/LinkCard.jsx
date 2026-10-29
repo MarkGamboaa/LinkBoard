@@ -11,6 +11,7 @@ export default function LinkCard({
   onEditLink,
   headerAction = null,
   footerAction = null,
+  ownerLabel = null,
   onOpen,
   expanded = false,
   hideHeader = false,
@@ -140,8 +141,8 @@ export default function LinkCard({
           {onOpen && !expanded ? (
             <button type="button" onClick={onOpen} className="w-full min-w-0 whitespace-normal break-words [overflow-wrap:anywhere] text-left text-lg font-bold text-blue-700 hover:underline">{category}</button>
           ) : <span className="min-w-0 whitespace-normal break-words [overflow-wrap:anywhere] text-lg font-bold text-blue-700">{category}</span>}
-          {userEmail && (
-            <span className="text-xs text-gray-500 mt-1">by {userEmail}</span>
+          {(ownerLabel || userEmail) && (
+            <span className="text-xs text-gray-500 mt-1">by {ownerLabel || userEmail}</span>
           )}
         </div>
         <div className="flex shrink-0 items-center gap-2">

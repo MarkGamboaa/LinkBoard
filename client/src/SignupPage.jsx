@@ -6,6 +6,7 @@ import LinkBoardLogo from "./assets/linkboardlogo.svg";
 export default function SignupPage({ onBack, onLogin, continueWithBoardCopy = false }) {
   const [firstName, setFirstName] = useState("");
   const [lastName, setLastName] = useState("");
+  const [nickname, setNickname] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
@@ -17,6 +18,13 @@ export default function SignupPage({ onBack, onLogin, continueWithBoardCopy = fa
     setError("");
     setSuccess("");
     setLoading(true);
+
+    const cleanNickname = nickname.trim();
+    if (cleanNickname.length < 2 || cleanNickname.length > 24) {
+      setError("Nickname must be between 2 and 24 characters");
+      setLoading(false);
+      return;
+    }
 
     // Validate password
     const validation = validatePassword(password);
@@ -40,13 +48,13 @@ export default function SignupPage({ onBack, onLogin, continueWithBoardCopy = fa
       await updateProfile(userCredential.user, { displayName: `${firstName} ${lastName}`.trim() });
       
       // Save profile data through the authenticated API
-      const profileResult = await updateUserProfile(firstName.trim(), lastName.trim());
+      const profileResult = await updateUserProfile(firstName.trim(), lastName.trim(), cleanNickname);
       if (!profileResult.success) {
         console.error('Failed to save profile:', profileResult.message);
       }
       
       setSuccess(verificationMessage);
-      setFirstName(""); setLastName(""); setEmail(""); setPassword("");
+      setFirstName(""); setLastName(""); setNickname(""); setEmail(""); setPassword("");
       // Firebase signs the new user in as part of account creation. The app's
       // auth listener redirects them to their dashboard, where pending actions
       // such as copying a public board can finish.
@@ -89,6 +97,9 @@ export default function SignupPage({ onBack, onLogin, continueWithBoardCopy = fa
             <form className="flex flex-col gap-4" onSubmit={handleSubmit}>
               <input type="text" placeholder="First name" className="input input-bordered w-full input-enhanced enhanced-focus" value={firstName} onChange={e => setFirstName(e.target.value)} />
               <input type="text" placeholder="Last name" className="input input-bordered w-full input-enhanced enhanced-focus" value={lastName} onChange={e => setLastName(e.target.value)} />
+              <div>
+                <input type="text" placeholder="Nickname" maxLength={24} className="input input-bordered w-full input-enhanced enhanced-focus" value={nickname} onChange={e => setNickname(e.target.value)} />
+              </div>
               <input type="email" placeholder="Email" className="input input-bordered w-full input-enhanced enhanced-focus" value={email} onChange={e => setEmail(e.target.value)} />
               <div>
                 <input type="password" placeholder="Password" className="input input-bordered w-full input-enhanced enhanced-focus" value={password} onChange={e => setPassword(e.target.value)} />

@@ -128,15 +128,9 @@ export default function DashboardPage({ onLogout, user: initialUser, onProfile, 
     }
   };
 
-  // Helper function to get user's first name
-  const getUserFirstName = () => {
-    if (userProfile?.firstName) {
-      return userProfile.firstName;
-    }
-    if (user?.displayName) {
-      return user.displayName.split(' ')[0];
-    }
-    return 'User';
+  // Show the nickname in the dashboard greeting without exposing a real name.
+  const getUserNickname = () => {
+    return userProfile?.nickname || 'User';
   };
 
   const fetchBoards = async () => {
@@ -607,7 +601,7 @@ export default function DashboardPage({ onLogout, user: initialUser, onProfile, 
             </button>
             <button className="btn btn-sm btn-ghost" onClick={onProfile}>
               <svg className="inline-block w-5 h-5 mr-1" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><path d="M5.121 17.804A13.937 13.937 0 0112 15c2.5 0 4.847.655 6.879 1.804M15 11a3 3 0 11-6 0 3 3 0 016 0z" /></svg>
-              Hi, {getUserFirstName()}
+              Hi, {getUserNickname()}
             </button>
             <button className={`btn btn-sm btn-white shadow ${logoutLoading ? 'enhanced-button-loading' : ''}`} onClick={handleLogout} disabled={logoutLoading}>
               {logoutLoading ? (
@@ -637,7 +631,7 @@ export default function DashboardPage({ onLogout, user: initialUser, onProfile, 
                 </button>
                 <button className="px-4 py-2 text-left hover:bg-gray-100 flex items-center gap-2" onClick={onProfile}>
                   <svg className="inline-block w-5 h-5" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><path d="M5.121 17.804A13.937 13.937 0 0112 15c2.5 0 4.847.655 6.879 1.804M15 11a3 3 0 11-6 0 3 3 0 016 0z" /></svg>
-                  Hi, {getUserFirstName()}
+                  Hi, {getUserNickname()}
                 </button>
                 <button className={`px-4 py-2 text-left hover:bg-gray-100 ${logoutLoading ? 'enhanced-button-loading' : ''}`} onClick={handleLogout} disabled={logoutLoading}>
                   {logoutLoading ? (
@@ -686,8 +680,8 @@ export default function DashboardPage({ onLogout, user: initialUser, onProfile, 
           {/* Boards List */}
                       <Masonry
               breakpointCols={breakpointColumnsObj}
-              className="my-masonry-grid w-full mb-4 overflow-y-auto overflow-x-hidden"
-              columnClassName="my-masonry-grid_column"
+              className="dashboard-masonry-grid w-full mb-4 overflow-y-auto overflow-x-hidden"
+              columnClassName="dashboard-masonry-grid_column"
             >
             {visibleBoards.map(({ board, index: idx }) => (
               <div

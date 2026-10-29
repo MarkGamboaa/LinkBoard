@@ -154,8 +154,8 @@ export default function PublicBoardPage({ onLogin, onSignup, onBackToDashboard, 
                 {/* Public Boards List */}
                 <Masonry
                   breakpointCols={breakpointColumnsObj}
-                  className="my-masonry-grid w-full mb-4 overflow-y-auto overflow-x-hidden"
-                  columnClassName="my-masonry-grid_column"
+                  className="public-masonry-grid w-full mb-4 overflow-y-auto overflow-x-hidden"
+                  columnClassName="public-masonry-grid_column"
                 >
                   {publicBoards.map((board, idx) => (
                     <div key={board._id || idx} className="draggable-board relative">
@@ -164,7 +164,7 @@ export default function PublicBoardPage({ onLogin, onSignup, onBackToDashboard, 
                         links={board.links || []}
                         isReadOnly={true}
                         isPublic={true}
-                        userEmail={board.userEmail}
+                        ownerLabel={board.ownerNickname}
                         headerAction={(
                           <button
                             type="button"
