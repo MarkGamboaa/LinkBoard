@@ -1,5 +1,5 @@
 import React, { useState } from "react";
-import { signInWithEmailAndPassword } from "firebase/auth";
+import { sendPasswordResetEmail, signInWithEmailAndPassword } from "firebase/auth";
 import { auth } from "./firebase";
 import LinkBoardLogo from "./assets/linkboard-mark.svg";
 
@@ -8,11 +8,14 @@ export default function LoginPage({ onBack, onSignup, onLogin, continueWithBoard
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
+  const [resetNotice, setResetNotice] = useState("");
   const [loading, setLoading] = useState(false);
+  const [resetLoading, setResetLoading] = useState(false);
 
   const handleSubmit = async (e) => {
     e.preventDefault();
     setError("");
+    setResetNotice("");
     setLoading(true);
     try {
       const userCredential = await signInWithEmailAndPassword(auth, email, password);
@@ -21,6 +24,34 @@ export default function LoginPage({ onBack, onSignup, onLogin, continueWithBoard
       setError("Invalid email or password");
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handlePasswordReset = async () => {
+    const resetEmail = email.trim();
+    setError("");
+    setResetNotice("");
+    if (!resetEmail) {
+      setError("Enter your email above first.");
+      return;
+    }
+
+    setResetLoading(true);
+    try {
+      await sendPasswordResetEmail(auth, resetEmail);
+      setResetNotice("Password reset request submitted. Check your inbox for a reset link.");
+    } catch (resetError) {
+      if (resetError.code === 'auth/user-not-found') {
+        setResetNotice("Password reset request submitted. Check your inbox for a reset link.");
+      } else if (resetError.code === 'auth/invalid-email') {
+        setError("Enter a valid email address.");
+      } else if (resetError.code === 'auth/too-many-requests') {
+        setError("Too many attempts. Please wait a little and try again.");
+      } else {
+        setError("Could not send a reset email right now. Please try again.");
+      }
+    } finally {
+      setResetLoading(false);
     }
   };
 
@@ -43,10 +74,15 @@ export default function LoginPage({ onBack, onSignup, onLogin, continueWithBoard
           <form className="w-full flex flex-col gap-4" onSubmit={handleSubmit}>
             <div>
               <label className="block text-sm mb-1" htmlFor="email">Your email</label>
-              <input id="email" type="email" placeholder="Your email" className="input input-bordered w-full input-enhanced enhanced-focus" value={email} onChange={e => setEmail(e.target.value)} />
+              <input id="email" type="email" placeholder="Your email" className="input input-bordered w-full input-enhanced enhanced-focus" value={email} onChange={e => { setEmail(e.target.value); setError(""); setResetNotice(""); }} />
             </div>
             <div className="relative">
-              <label className="block text-sm mb-1" htmlFor="password">Your password</label>
+              <div className="mb-1 flex items-center justify-between gap-2">
+                <label className="block text-sm" htmlFor="password">Your password</label>
+                <button type="button" className="text-sm text-primary underline disabled:opacity-60" onClick={handlePasswordReset} disabled={resetLoading}>
+                  {resetLoading ? 'Sending...' : 'Forgot password?'}
+                </button>
+              </div>
               <input id="password" type={showPassword ? "text" : "password"} placeholder="Your password" className="password-input-no-native-reveal input input-bordered w-full pr-16 input-enhanced enhanced-focus" value={password} onChange={e => setPassword(e.target.value)} />
               <span className="absolute right-3 top-8 flex items-center text-gray-400 cursor-pointer select-none" onClick={() => setShowPassword(v => !v)}>
                 {showPassword ? (
@@ -67,6 +103,7 @@ export default function LoginPage({ onBack, onSignup, onLogin, continueWithBoard
                 )}
               </span>
             </div>
+            {resetNotice && <p className="text-sm text-green-700" role="status">{resetNotice}</p>}
             <button type="submit" className={`btn btn-primary w-full text-lg mt-2 button-press ${loading ? 'enhanced-button-loading' : ''}`} disabled={loading}>
               {loading ? (
                 <>
