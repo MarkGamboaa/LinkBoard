@@ -34,11 +34,13 @@ await app.register(cors, {
 });
 
 app.addHook('onRequest', async (request, reply) => {
-  if (request.method === 'OPTIONS' || request.url === '/' || request.url === '/api/test' || request.url === '/api/health' || request.url === '/api/boards/public' || (request.method === 'GET' && request.url.startsWith('/api/invites/'))) {
+  const isPublicBoardList = request.method === 'GET' && request.url.split('?')[0] === '/api/boards/public';
+  if (request.method === 'OPTIONS' || request.url === '/' || request.url === '/api/test' || request.url === '/api/health' || (request.method === 'GET' && request.url.startsWith('/api/invites/'))) {
     return;
   }
 
   const authorization = request.headers.authorization;
+  if (isPublicBoardList && !authorization) return;
   if (!authorization?.startsWith('Bearer ')) {
     return reply.code(401).send({ error: 'A Firebase sign-in token is required' });
   }
@@ -161,7 +163,7 @@ app.get('/api/boards', async (request) => {
   }));
 });
 
-app.get('/api/boards/public', async () => {
+app.get('/api/boards/public', async (request) => {
   const boards = await prisma.board.findMany({
     where: { isPublic: true },
     include: { links: { orderBy: { position: 'asc' } } },
@@ -176,6 +178,7 @@ app.get('/api/boards/public', async () => {
     _id: board.id,
     title: board.title,
     ownerNickname: ownerNicknames.get(board.ownerUid) || 'LinkBoard user',
+    isOwner: request.user?.uid === board.ownerUid,
     links: (board.links || []).map(serializeLink),
   }));
 });
@@ -186,6 +189,9 @@ app.post('/api/boards/:id/copy', async (request, reply) => {
     include: { links: { orderBy: { position: 'asc' } } },
   });
   if (!sourceBoard) return reply.code(404).send({ error: 'This public board is no longer available' });
+  if (sourceBoard.ownerUid === request.user.uid) {
+    return reply.code(403).send({ error: 'You cannot copy your own public board' });
+  }
 
   const copiedBoard = await prisma.board.create({
     data: {

@@ -3,7 +3,7 @@ import BrandLogo from "./BrandLogo";
 import LinkCard from "./LinkCard";
 import Masonry from "react-masonry-css";
 import LoadingSpinner from "./components/LoadingSpinner.jsx";
-import { apiFetch } from "./firebase";
+import { apiFetch, auth } from "./firebase";
 import { getApiUrl } from "./utils/api";
 
 export default function PublicBoardPage({ onLogin, onSignup, onBackToDashboard, onRequireLoginToCopy, isLoggedIn = false }) {
@@ -61,7 +61,11 @@ export default function PublicBoardPage({ onLogin, onSignup, onBackToDashboard, 
   const fetchPublicBoards = async () => {
     try {
       console.log('Fetching public boards...');
-      const response = await fetch(getApiUrl('/api/boards/public'), { cache: 'no-store' });
+      const headers = {};
+      if (auth.currentUser) {
+        headers.Authorization = `Bearer ${await auth.currentUser.getIdToken()}`;
+      }
+      const response = await fetch(getApiUrl('/api/boards/public'), { headers, cache: 'no-store' });
       console.log('Fetch public boards response status:', response.status);
       
       if (!response.ok) {
@@ -197,7 +201,11 @@ export default function PublicBoardPage({ onLogin, onSignup, onBackToDashboard, 
                         isReadOnly={true}
                         isPublic={true}
                         ownerLabel={board.ownerNickname}
-                        headerAction={(
+                        headerAction={board.isOwner ? (
+                          <span className="inline-flex items-center rounded-full bg-gray-100 px-3 py-1 text-xs font-medium text-gray-600">
+                            Your board
+                          </span>
+                        ) : (
                           <button
                             type="button"
                             className={`inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-full border-0 p-0 text-[0px] leading-none align-middle transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-indigo-600 ${copiedBoardIds.has(board._id) ? 'bg-emerald-50 text-emerald-700' : 'bg-indigo-50 text-indigo-700 hover:bg-indigo-100'}`}
