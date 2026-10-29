@@ -56,12 +56,13 @@ export default function DashboardPage({ onLogout, user: initialUser, onProfile, 
   const [savingLink, setSavingLink] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
   const [inviteBoard, setInviteBoard] = useState(null);
-  const [inviteEmail, setInviteEmail] = useState("");
   const [inviteLink, setInviteLink] = useState("");
   const [inviteError, setInviteError] = useState("");
   const [inviteNotice, setInviteNotice] = useState(null);
   const [creatingInvite, setCreatingInvite] = useState(false);
-  const [inviteMode, setInviteMode] = useState(null);
+  const [memberRemovalTarget, setMemberRemovalTarget] = useState(null);
+  const [memberRemovalError, setMemberRemovalError] = useState('');
+  const [removingMember, setRemovingMember] = useState(false);
   const [loading, setLoading] = useState(true);
   const [logoutLoading, setLogoutLoading] = useState(false);
   const [addingLinkLoading, setAddingLinkLoading] = useState(false);
@@ -516,30 +517,26 @@ export default function DashboardPage({ onLogout, user: initialUser, onProfile, 
     }
   };
 
-  const handleCreateInvite = async (sendEmail = false) => {
-    if (!inviteBoard || !inviteEmail.trim()) return;
+  const handleCreateInvite = async () => {
+    if (!inviteBoard) return;
     setCreatingInvite(true);
-    setInviteMode(sendEmail ? 'email' : 'link');
     setInviteError("");
     setInviteNotice(null);
     setInviteLink("");
     try {
       const response = await apiFetch(`/api/boards/${inviteBoard._id}/invites`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email: inviteEmail, sendEmail }),
       });
       const result = await response.json().catch(() => ({}));
       if (!response.ok) throw new Error(result.error || `Could not create invite (HTTP ${response.status})`);
       const url = new URL('/invite', window.location.origin);
       url.searchParams.set('invite', result.token);
       setInviteLink(url.toString());
-      setInviteNotice({ message: result.emailMessage || 'Invitation link created.', success: result.emailSent === true || !sendEmail });
+      setInviteNotice({ message: 'Invite link created. It expires in 7 days.', success: true });
     } catch (error) {
       setInviteError(error.message || 'Could not create invite. Try again.');
     } finally {
       setCreatingInvite(false);
-      setInviteMode(null);
     }
   };
 
@@ -555,8 +552,11 @@ export default function DashboardPage({ onLogout, user: initialUser, onProfile, 
     }
   };
 
-  const handleRemoveMember = async (board, member) => {
-    if (!window.confirm(`Remove ${member.email} from “${board.title}”?`)) return;
+  const handleRemoveMember = async () => {
+    if (!memberRemovalTarget) return;
+    const { board, member } = memberRemovalTarget;
+    setRemovingMember(true);
+    setMemberRemovalError('');
     try {
       const response = await apiFetch(`/api/boards/${board._id}/members/${encodeURIComponent(member.userUid)}`, { method: 'DELETE' });
       const result = await response.json().catch(() => ({}));
@@ -567,8 +567,11 @@ export default function DashboardPage({ onLogout, user: initialUser, onProfile, 
       setInviteBoard((current) => current?._id === board._id
         ? { ...current, members: (current.members || []).filter((entry) => entry.userUid !== member.userUid) }
         : current);
+      setMemberRemovalTarget(null);
     } catch (error) {
-      setInviteError(error.message || 'Could not remove this collaborator.');
+      setMemberRemovalError(error.message || 'Could not remove this collaborator.');
+    } finally {
+      setRemovingMember(false);
     }
   };
 
@@ -796,7 +799,6 @@ export default function DashboardPage({ onLogout, user: initialUser, onProfile, 
                         className="btn btn-ghost btn-sm"
                         onClick={() => {
                           setInviteBoard(selectedBoard);
-                          setInviteEmail('');
                           setInviteLink('');
                           setInviteError('');
                           setInviteNotice(null);
@@ -1008,7 +1010,10 @@ export default function DashboardPage({ onLogout, user: initialUser, onProfile, 
                 autoFocus
               />
               <label className="flex w-full flex-col gap-1 text-sm font-medium">
-                Tags <span className="font-normal text-gray-500">(optional, separated by commas)</span>
+                <span className="flex w-full items-baseline justify-between gap-2">
+                  <span>Tags</span>
+                  <span className="text-right font-normal text-gray-500">(optional, separated by commas)</span>
+                </span>
                 <input
                   className="input input-bordered bg-white/60 backdrop-blur placeholder:text-gray-500 font-normal w-full"
                   placeholder="e.g. learning, frontend"
@@ -1020,7 +1025,10 @@ export default function DashboardPage({ onLogout, user: initialUser, onProfile, 
                 />
               </label>
               <label className="flex w-full flex-col gap-1 text-sm font-medium">
-                Description or note <span className="font-normal text-gray-500">(optional)</span>
+                <span className="flex w-full items-baseline justify-between gap-2">
+                  <span>Description or note</span>
+                  <span className="text-right font-normal text-gray-500">(optional)</span>
+                </span>
                 <textarea
                   className="textarea textarea-bordered bg-white/60 backdrop-blur placeholder:text-gray-500 font-normal w-full"
                   placeholder="Why are you saving this link?"
@@ -1082,44 +1090,22 @@ export default function DashboardPage({ onLogout, user: initialUser, onProfile, 
                 </svg>
               </button>
               <h2 className="text-lg font-bold">Share “{inviteBoard.title}”</h2>
-              <p className="text-sm text-gray-600">Invited by <strong>{userProfile?.displayName || user?.displayName || user?.email || 'You'}</strong>.</p>
-              <p className="text-sm text-gray-600">Send an invitation email or create a link to share yourself. The invite is for the email address below and expires in 7 days.</p>
-              <label htmlFor="invite-email" className="text-sm font-medium">Email address</label>
-              <input
-                id="invite-email"
-                type="email"
-                className="input input-bordered w-full"
-                placeholder="person@example.com"
-                value={inviteEmail}
-                onChange={(event) => setInviteEmail(event.target.value)}
-              />
-              <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
-                <button className="btn btn-primary" onClick={() => handleCreateInvite(true)} disabled={creatingInvite || !inviteEmail.trim()}>
-                  {creatingInvite && inviteMode === 'email' ? 'Sending...' : 'Send invite email'}
-                </button>
-                <button className="btn btn-outline" onClick={() => handleCreateInvite(false)} disabled={creatingInvite || !inviteEmail.trim()}>
-                  {creatingInvite && inviteMode === 'link' ? 'Creating...' : 'Create invite link'}
-                </button>
-              </div>
-              {inviteNotice && (
-                <p className={`rounded-lg px-3 py-2 text-sm ${inviteNotice.success ? 'bg-green-50 text-green-800' : 'bg-amber-50 text-amber-900'}`} role="status">
-                  {inviteNotice.message}
-                </p>
-              )}
+              
+              <p className="text-sm text-gray-600">Anyone with this link can join within 7 days. After joining, they keep access until they leave or you remove them.</p>
               {inviteLink && (
                 <div className="flex flex-col gap-2">
                   <div className="relative">
                     <input
                       id="invite-link"
                       aria-label="Invitation link"
-                      className="input input-bordered w-full pr-12 text-xs"
+                      className="input input-bordered h-10 w-full pr-12 text-xs"
                       readOnly
                       value={inviteLink}
                       onFocus={(event) => event.target.select()}
                     />
                     <button
                       type="button"
-                      className="btn btn-ghost btn-sm btn-circle absolute right-1 top-1/2 -translate-y-1/2"
+                      className="absolute right-1 top-1/2 z-10 flex h-8 w-8 -translate-y-1/2 items-center justify-center rounded-lg text-gray-700 transition-colors hover:bg-gray-100 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-indigo-600"
                       onClick={handleCopyInviteLink}
                       aria-label="Copy invite link"
                       title="Copy invite link"
@@ -1132,21 +1118,70 @@ export default function DashboardPage({ onLogout, user: initialUser, onProfile, 
                   </div>
                 </div>
               )}
+              {inviteNotice && (
+                <p className={`rounded-lg px-3 py-2 text-sm ${inviteNotice.success ? 'bg-green-50 text-green-800' : 'bg-amber-50 text-amber-900'}`} role="status">
+                  {inviteNotice.message}
+                </p>
+              )}
               {inviteBoard.members?.length > 0 && (
                 <div>
                   <h3 className="text-sm font-semibold mb-2">Collaborators</h3>
                   <ul className="flex flex-col gap-2">
                     {inviteBoard.members.map((member) => (
-                      <li key={member.userUid} className="flex items-center justify-between text-sm">
-                        <span>{member.email}</span>
-                        <button className="text-red-600 hover:underline" onClick={() => handleRemoveMember(inviteBoard, member)}>Remove</button>
+                      <li key={member.userUid} className="flex items-center justify-between gap-3 text-sm">
+                        <div className="min-w-0">
+                          <span className="block truncate font-medium text-gray-900">{member.nickname || 'Collaborator'}</span>
+                          <span className="block truncate text-xs text-gray-500">{member.email}</span>
+                        </div>
+                        <button
+                          className="shrink-0 text-red-600 hover:underline"
+                          onClick={() => {
+                            setMemberRemovalTarget({ board: inviteBoard, member });
+                            setMemberRemovalError('');
+                          }}
+                        >
+                          Remove
+                        </button>
                       </li>
                     ))}
                   </ul>
                 </div>
               )}
               {inviteError && <p className="text-sm text-red-600" role="alert">{inviteError}</p>}
+              <button className="btn btn-primary mt-auto w-full" onClick={handleCreateInvite} disabled={creatingInvite}>
+                {creatingInvite ? 'Creating...' : 'Create invite link'}
+              </button>
             </div>
+          </div>
+        )}
+        {memberRemovalTarget && (
+          <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/35 backdrop-blur-sm p-4">
+            <section
+              role="alertdialog"
+              aria-modal="true"
+              aria-labelledby="remove-collaborator-title"
+              className="w-full max-w-md rounded-2xl bg-white p-6 shadow-2xl"
+            >
+              <h2 id="remove-collaborator-title" className="text-lg font-bold text-gray-900">Remove collaborator?</h2>
+              <p className="mt-2 text-sm text-gray-600">
+                {memberRemovalTarget.member.nickname || 'This collaborator'} will lose access to “{memberRemovalTarget.board.title}”.
+              </p>
+              <p className="mt-1 text-sm text-gray-500">{memberRemovalTarget.member.email}</p>
+              {memberRemovalError && <p className="mt-3 text-sm text-red-600" role="alert">{memberRemovalError}</p>}
+              <div className="mt-6 flex justify-end gap-3">
+                <button
+                  type="button"
+                  className="btn btn-ghost"
+                  onClick={() => setMemberRemovalTarget(null)}
+                  disabled={removingMember}
+                >
+                  Cancel
+                </button>
+                <button type="button" className="btn btn-error" onClick={handleRemoveMember} disabled={removingMember}>
+                  {removingMember ? 'Removing...' : 'Remove collaborator'}
+                </button>
+              </div>
+            </section>
           </div>
         )}
       </main>

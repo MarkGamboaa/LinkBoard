@@ -56,7 +56,6 @@ model BoardMember {
 model BoardInvite {
   id           String    @id @default(cuid())
   boardId      String
-  email        String
   tokenHash    String    @unique
   invitedByUid String
   expiresAt    DateTime
@@ -64,7 +63,6 @@ model BoardInvite {
   createdAt    DateTime  @default(now())
   board        Board     @relation(fields: [boardId], references: [id], onDelete: Cascade)
 
-  @@index([boardId, email])
 }
 
 model UserProfile {

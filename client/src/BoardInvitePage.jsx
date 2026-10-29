@@ -1,22 +1,19 @@
 import React, { useEffect, useState } from 'react';
 import BrandLogo from './BrandLogo';
-import { sendEmailVerification, reload } from 'firebase/auth';
-import { apiFetch, auth } from './firebase';
+import { apiFetch } from './firebase';
 import { getApiUrl } from './utils/api';
 
 export default function BoardInvitePage({ token, user, onLogin, onSignup, onSwitchAccount, onAccepted }) {
   const [invite, setInvite] = useState(null);
   const [loading, setLoading] = useState(true);
   const [accepting, setAccepting] = useState(false);
-  const [sendingVerification, setSendingVerification] = useState(false);
-  const [verificationNotice, setVerificationNotice] = useState('');
   const [error, setError] = useState('');
 
   useEffect(() => {
     let cancelled = false;
     const loadInvite = async () => {
       try {
-        const response = await fetch(getApiUrl(`/api/invites/${encodeURIComponent(token)}`));
+        const response = await fetch(getApiUrl(`/api/invites/${encodeURIComponent(token)}`), { cache: 'no-store' });
         const result = await response.json().catch(() => ({}));
         if (!response.ok) throw new Error(result.error || 'This invite is unavailable.');
         if (!cancelled) setInvite(result);
@@ -34,10 +31,6 @@ export default function BoardInvitePage({ token, user, onLogin, onSignup, onSwit
     setAccepting(true);
     setError('');
     try {
-      if (auth.currentUser) {
-        await reload(auth.currentUser);
-        await auth.currentUser.getIdToken(true);
-      }
       const response = await apiFetch(`/api/invites/${encodeURIComponent(token)}/accept`, { method: 'POST' });
       const result = await response.json().catch(() => ({}));
       if (!response.ok) throw new Error(result.error || 'Could not accept this invite.');
@@ -46,21 +39,6 @@ export default function BoardInvitePage({ token, user, onLogin, onSignup, onSwit
       setError(requestError.message || 'Could not accept this invite.');
     } finally {
       setAccepting(false);
-    }
-  };
-
-  const resendVerification = async () => {
-    if (!auth.currentUser) return;
-    setSendingVerification(true);
-    setVerificationNotice('');
-    setError('');
-    try {
-      await sendEmailVerification(auth.currentUser);
-      setVerificationNotice('Verification email sent. Open it, verify your address, then return here and choose Join board.');
-    } catch (requestError) {
-      setError(requestError.message || 'Could not send the verification email.');
-    } finally {
-      setSendingVerification(false);
     }
   };
 
@@ -74,15 +52,7 @@ export default function BoardInvitePage({ token, user, onLogin, onSignup, onSwit
             <p className="text-gray-700"><strong>{invite.ownerName}</strong> invited you to join <strong>{invite.boardTitle}</strong> and collaborate on its links.</p>
             {user ? (
               <>
-                <p className="text-sm text-gray-600">Signed in as {user.email || 'an account without an email'}.</p>
-                {user.emailVerified === false && (
-                  <div className="rounded-lg bg-amber-50 p-3 text-sm text-amber-900">
-                    Verify this email address before joining. The invite can be accepted only by the verified account matching its email.
-                    <button className="btn btn-sm btn-outline mt-3 block" onClick={resendVerification} disabled={sendingVerification}>
-                      {sendingVerification ? 'Sending...' : 'Resend verification email'}
-                    </button>
-                  </div>
-                )}
+                <p className="text-sm text-gray-600">Signed in as <strong>{user.email || 'an account without an email'}</strong>. You can join this board.</p>
                 <button className="btn btn-primary self-start" onClick={acceptInvite} disabled={accepting}>
                   {accepting ? 'Joining…' : 'Join board'}
                 </button>
@@ -90,14 +60,13 @@ export default function BoardInvitePage({ token, user, onLogin, onSignup, onSwit
               </>
             ) : (
               <>
-                <p className="text-sm text-gray-600">Sign in with the email address the invite was sent to.</p>
+                <p className="text-sm text-gray-600">Sign in or create an account to join this board.</p>
                 <div className="flex gap-3">
                   <button className="btn btn-primary" onClick={onLogin}>Sign in</button>
                   <button className="btn btn-ghost" onClick={onSignup}>Create account</button>
                 </div>
               </>
             )}
-            {verificationNotice && <p className="text-sm text-green-700" role="status">{verificationNotice}</p>}
           </>
         ) : <p className="text-red-600">{error || 'This invite is unavailable.'}</p>}
         {error && invite && <p className="text-sm text-red-600" role="alert">{error}</p>}
