@@ -1,0 +1,10 @@
+{
+  "rewrites": [
+    { "source": "/signup", "destination": "/index.html" },
+    { "source": "/login", "destination": "/index.html" },
+    { "source": "/dashboard", "destination": "/index.html" },
+    { "source": "/profile", "destination": "/index.html" },
+    { "source": "/public", "destination": "/index.html" },
+    { "source": "/invite", "destination": "/index.html" }
+  ]
+}
