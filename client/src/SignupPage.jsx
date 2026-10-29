@@ -4,7 +4,7 @@ import { createUserWithEmailAndPassword, sendEmailVerification, updateProfile } 
 import { auth, validatePassword, updateUserProfile } from './firebase';
 import LinkBoardLogo from "./assets/linkboard-mark.svg";
 
-export default function SignupPage({ onBack, onLogin, continueWithBoardCopy = false, inviteToken = null, pendingBoardCopyId = null }) {
+export default function SignupPage({ onBack, onLogin, continueWithBoardCopy = false }) {
   const [firstName, setFirstName] = useState("");
   const [lastName, setLastName] = useState("");
   const [nickname, setNickname] = useState("");

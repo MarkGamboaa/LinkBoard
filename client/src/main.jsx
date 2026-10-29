@@ -189,7 +189,7 @@ function App() {
   if (page === 'signup') {
     return (
       <>
-        <SignupPage onBack={() => goBack('landing')} onLogin={() => navigate('login')} continueWithBoardCopy={Boolean(pendingBoardCopyId)} inviteToken={inviteToken} pendingBoardCopyId={pendingBoardCopyId} />
+        <SignupPage onBack={() => goBack('landing')} onLogin={() => navigate('login')} continueWithBoardCopy={Boolean(pendingBoardCopyId)} />
         <ToastContainer />
       </>
     );
