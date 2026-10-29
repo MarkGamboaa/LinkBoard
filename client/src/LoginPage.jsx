@@ -47,7 +47,7 @@ export default function LoginPage({ onBack, onSignup, onLogin, continueWithBoard
             </div>
             <div className="relative">
               <label className="block text-sm mb-1" htmlFor="password">Your password</label>
-              <input id="password" type={showPassword ? "text" : "password"} placeholder="Your password" className="input input-bordered w-full pr-16 input-enhanced enhanced-focus" value={password} onChange={e => setPassword(e.target.value)} />
+              <input id="password" type={showPassword ? "text" : "password"} placeholder="Your password" className="password-input-no-native-reveal input input-bordered w-full pr-16 input-enhanced enhanced-focus" value={password} onChange={e => setPassword(e.target.value)} />
               <span className="absolute right-3 top-8 flex items-center text-gray-400 cursor-pointer select-none" onClick={() => setShowPassword(v => !v)}>
                 {showPassword ? (
                   // Eye-off icon (Heroicons outline)
