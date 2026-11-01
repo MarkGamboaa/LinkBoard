@@ -187,11 +187,6 @@ export default function LinkCard({
                 className={`relative overflow-hidden rounded-lg ${isColorDark(link.color || '#181f29') ? '' : 'border'}`}
                 style={{ background: link.color || '#181f29', borderColor: 'rgba(0, 0, 0, 0.16)' }}
               >
-                {link.previewImageUrl && (
-                  <a href={link.url} target="_blank" rel="noopener noreferrer" tabIndex={-1}>
-                    <img src={link.previewImageUrl} alt="" loading="lazy" referrerPolicy="no-referrer" className="w-full aspect-[16/8] object-cover" />
-                  </a>
-                )}
                 <a
                   href={link.url}
                   target="_blank"
@@ -200,9 +195,8 @@ export default function LinkCard({
                 >
                   <span className="flex items-center gap-2 font-semibold truncate">
                     {(link.faviconUrl || getFaviconUrl(link.url)) && <img src={link.faviconUrl || getFaviconUrl(link.url)} alt="" loading="lazy" referrerPolicy="no-referrer" onError={(event) => { event.currentTarget.style.display = 'none'; }} className="w-4 h-4 rounded-sm shrink-0" />}
-                    <span className="truncate">{link.siteTitle || link.title}</span>
+                    <span className="truncate">{link.title || link.siteTitle}</span>
                   </span>
-                  {link.siteTitle && link.siteTitle !== link.title && <span className="text-xs opacity-80 truncate block">Saved as: {link.title}</span>}
                   <span className="text-xs truncate block">{link.url}</span>
               {expanded && link.description && <span className="text-xs mt-1 line-clamp-2 block">{link.description}</span>}
                 </a>
