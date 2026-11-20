@@ -49,7 +49,8 @@ export const uploadProfileImage = async (file) => {
 export const deleteProfileImage = async () => {
   try {
     if (!auth.currentUser) throw new Error('No user is currently signed in');
-    await updateProfile(auth.currentUser, { photoURL: null });
+    // Firebase ignores null here (means "unchanged"); an empty string clears the photo.
+    await updateProfile(auth.currentUser, { photoURL: '' });
     return { success: true };
   } catch (error) {
     console.error('Error deleting profile image:', error);
