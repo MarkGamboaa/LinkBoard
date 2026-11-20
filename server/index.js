@@ -83,10 +83,20 @@ function safeMetadataUrl(value) {
   }
 }
 
+const MAX_BOARD_TITLE_LENGTH = 100;
+const MAX_LINKS_PER_BOARD = 200;
+const PUBLIC_BOARD_LIMIT = 50;
+
+function linksError(links) {
+  if (!links) return 'Links must be an array';
+  if (links.length > MAX_LINKS_PER_BOARD) return `A board can have at most ${MAX_LINKS_PER_BOARD} links`;
+  return null;
+}
+
 function normalizeLinks(links) {
   if (!Array.isArray(links)) return null;
   return links.map((link, position) => ({
-    title: String(link?.title || '').trim(),
+    title: String(link?.title || '').trim().slice(0, 300),
     url: safeMetadataUrl(link?.url) || '',
     color: typeof link?.color === 'string' ? link.color : null,
     position,
@@ -116,19 +126,6 @@ app.get('/api/health', async (_request, reply) => {
 });
 
 app.get('/api/boards', async (request) => {
-  // Copies created by earlier versions were given a " (copy)" suffix.
-  // Remove that generated suffix for this user's existing copied boards too.
-  const legacyCopies = await prisma.board.findMany({
-    where: { ownerUid: request.user.uid, title: { endsWith: ' (copy)' } },
-    select: { id: true, title: true },
-  });
-  if (legacyCopies.length) {
-    await prisma.$transaction(legacyCopies.map((board) => prisma.board.update({
-      where: { id: board.id },
-      data: { title: board.title.slice(0, -7) },
-    })));
-  }
-
   const boards = await prisma.board.findMany({
     where: {
       OR: [
@@ -168,6 +165,7 @@ app.get('/api/boards/public', async (request) => {
     where: { isPublic: true },
     include: { links: { orderBy: { position: 'asc' } } },
     orderBy: { createdAt: 'desc' },
+    take: PUBLIC_BOARD_LIMIT,
   });
   const ownerProfiles = await prisma.userProfile.findMany({
     where: { firebaseUid: { in: [...new Set(boards.map((board) => board.ownerUid))] } },
@@ -225,9 +223,11 @@ app.post('/api/boards/:id/copy', async (request, reply) => {
 app.post('/api/boards', async (request, reply) => {
   const title = String(request.body?.title || '').trim();
   if (!title) return reply.code(400).send({ error: 'Board title is required' });
+  if (title.length > MAX_BOARD_TITLE_LENGTH) return reply.code(400).send({ error: `Board title must be ${MAX_BOARD_TITLE_LENGTH} characters or fewer` });
 
   const links = normalizeLinks(request.body?.links || []);
-  if (!links) return reply.code(400).send({ error: 'Links must be an array' });
+  const linkProblem = linksError(links);
+  if (linkProblem) return reply.code(400).send({ error: linkProblem });
 
   const board = await prisma.board.create({
     data: {
@@ -255,14 +255,16 @@ app.put('/api/boards/:id', async (request, reply) => {
   if (typeof request.body?.title === 'string') {
     const title = request.body.title.trim();
     if (!title) return reply.code(400).send({ error: 'Board title cannot be empty' });
+    if (title.length > MAX_BOARD_TITLE_LENGTH) return reply.code(400).send({ error: `Board title must be ${MAX_BOARD_TITLE_LENGTH} characters or fewer` });
     data.title = title;
   }
   if (typeof request.body?.isPublic === 'boolean') data.isPublic = request.body.isPublic;
   if (Number.isInteger(request.body?.order)) data.sortOrder = request.body.order;
 
   const links = request.body?.links === undefined ? undefined : normalizeLinks(request.body.links);
-  if (request.body?.links !== undefined && !links) {
-    return reply.code(400).send({ error: 'Links must be an array' });
+  if (request.body?.links !== undefined) {
+    const linkProblem = linksError(links);
+    if (linkProblem) return reply.code(400).send({ error: linkProblem });
   }
   if (links?.some((link) => !link.title || !link.url)) {
     return reply.code(400).send({ error: 'Each link needs a title and URL' });

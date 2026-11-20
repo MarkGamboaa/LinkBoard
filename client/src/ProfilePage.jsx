@@ -43,10 +43,8 @@ export default function ProfilePage({ user, onBack, onLogout, onUserUpdate }) {
   const passwordsMatch = confirmPassword.length > 0 && newPassword === confirmPassword;
   const passwordsDoNotMatch = confirmPassword.length > 0 && newPassword !== confirmPassword;
 
-  // Debug logging for user prop changes
+  // Keep the local avatar in sync with the user prop.
   useEffect(() => {
-    console.log('ProfilePage - user prop changed:', user);
-    console.log('ProfilePage - user.photoURL:', user?.photoURL);
     setLocalPhotoURL(user?.photoURL);
   }, [user]);
 
@@ -171,23 +169,19 @@ export default function ProfilePage({ user, onBack, onLogout, onUserUpdate }) {
   };
 
   const handleConfirmDeleteImage = async () => {
-    console.log('Before delete - user.photoURL:', user.photoURL);
     setUploadingImage(true);
     try {
       const result = await deleteProfileImage();
-      console.log('Delete result:', result);
       if (result.success) {
         setDeleteImageModal(false);
         // Immediately update local state to show the change
         setLocalPhotoURL(null);
         // Reload the user to get the latest data
         await auth.currentUser.reload();
-        console.log('After reload - auth.currentUser.photoURL:', auth.currentUser.photoURL);
         // Small delay to ensure the update is complete
         await new Promise(resolve => setTimeout(resolve, 100));
         // Update the user state in the parent component
         if (onUserUpdate) {
-          console.log('Calling onUserUpdate with:', auth.currentUser);
           onUserUpdate(auth.currentUser);
         }
         window.showToast('Profile image deleted successfully!', 'success');
@@ -398,7 +392,6 @@ export default function ProfilePage({ user, onBack, onLogout, onUserUpdate }) {
                 <div className="avatar">
                   <div className="w-20 h-20 sm:w-24 sm:h-24 rounded-full">
                     {(() => {
-                      console.log('Rendering profile image - localPhotoURL:', localPhotoURL, 'type:', typeof localPhotoURL);
                       return localPhotoURL ? (
                         <img 
                           src={localPhotoURL} 

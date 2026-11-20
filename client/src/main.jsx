@@ -1,14 +1,15 @@
-import { StrictMode, useState, useEffect } from 'react';
+import { StrictMode, Suspense, lazy, useState, useEffect } from 'react';
 import { createRoot } from 'react-dom/client';
 import './index.css';
 
 import LandingPage from './LandingPage.jsx';
 import SignupPage from './SignupPage.jsx';
 import LoginPage from './LoginPage.jsx';
-import DashboardPage from './DashboardPage.jsx';
-import ProfilePage from './ProfilePage.jsx';
-import PublicBoardPage from './PublicBoardPage.jsx';
-import BoardInvitePage from './BoardInvitePage.jsx';
+// Signed-in pages load on demand so the landing page downloads less up front.
+const DashboardPage = lazy(() => import('./DashboardPage.jsx'));
+const ProfilePage = lazy(() => import('./ProfilePage.jsx'));
+const PublicBoardPage = lazy(() => import('./PublicBoardPage.jsx'));
+const BoardInvitePage = lazy(() => import('./BoardInvitePage.jsx'));
 import LoadingSpinner from './components/LoadingSpinner.jsx';
 import ToastContainer from './components/ToastContainer.jsx';
 import { onAuthStateChanged, signOut } from 'firebase/auth';
@@ -160,8 +161,6 @@ function App() {
           onBack={() => goBack('dashboard')}
           onLogout={handleLogout}
           onUserUpdate={(updatedUser) => {
-            console.log('Main App - onUserUpdate called with:', updatedUser);
-            console.log('Main App - updatedUser.photoURL:', updatedUser?.photoURL);
             setUser(updatedUser);
           }}
         />
@@ -214,6 +213,8 @@ export default App;
 
 createRoot(document.getElementById('root')).render(
   <StrictMode>
-    <App />
+    <Suspense fallback={<LoadingSpinner fullScreen text="Loading..." />}>
+      <App />
+    </Suspense>
   </StrictMode>,
 );

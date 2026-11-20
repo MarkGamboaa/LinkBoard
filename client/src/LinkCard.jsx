@@ -4,7 +4,6 @@ import { getFaviconUrl } from "./utils/linkPreview";
 export default function LinkCard({
   category = "UI/UX",
   links = [],
-  onDelete,
   onAddLink,
   onDeleteLink,
   onReorderLinks,
@@ -151,7 +150,6 @@ export default function LinkCard({
           {!isReadOnly && isOwner && onTogglePublic && (
             <button
               onClick={(e) => {
-                console.log('Toggle button clicked!', { isPublic, category });
                 e.preventDefault();
                 e.stopPropagation();
                 onTogglePublic();

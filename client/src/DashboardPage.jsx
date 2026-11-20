@@ -152,16 +152,13 @@ export default function DashboardPage({ onLogout, user: initialUser, onProfile, 
 
   const fetchBoards = async () => {
     try {
-      console.log('Fetching boards for user:', user.uid);
       const response = await apiFetch('/api/boards');
-      console.log('Fetch boards response status:', response.status);
       
       if (!response.ok) {
         throw new Error(`HTTP error! status: ${response.status}`);
       }
       
       const data = await response.json();
-      console.log('Fetched boards data:', data);
       const cleanedBoards = await Promise.all(data.map(removeGeneratedCopySuffix));
       setBoards(cleanedBoards);
     } catch (error) {
@@ -787,6 +784,7 @@ export default function DashboardPage({ onLogout, user: initialUser, onProfile, 
                         id="selected-board-title"
                         className="input input-bordered flex-1 min-w-[180px]"
                         value={boardTitleDraft}
+                        maxLength={100}
                         onChange={(event) => setBoardTitleDraft(event.target.value)}
                         autoFocus
                       />
@@ -984,6 +982,7 @@ export default function DashboardPage({ onLogout, user: initialUser, onProfile, 
                 className="input input-bordered bg-white/60 backdrop-blur placeholder:text-gray-500 w-full"
                 placeholder="Board Title"
                 value={newBoardTitle}
+                maxLength={100}
                 onChange={e => {
                   setNewBoardTitle(e.target.value);
                   setCreateBoardError("");

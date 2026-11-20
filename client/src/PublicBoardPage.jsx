@@ -60,20 +60,17 @@ export default function PublicBoardPage({ onLogin, onSignup, onBackToDashboard, 
 
   const fetchPublicBoards = async () => {
     try {
-      console.log('Fetching public boards...');
       const headers = {};
       if (auth.currentUser) {
         headers.Authorization = `Bearer ${await auth.currentUser.getIdToken()}`;
       }
       const response = await fetch(getApiUrl('/api/boards/public'), { headers, cache: 'no-store' });
-      console.log('Fetch public boards response status:', response.status);
       
       if (!response.ok) {
         throw new Error(`HTTP error! status: ${response.status}`);
       }
       
       const data = await response.json();
-      console.log('Fetched public boards data:', data);
       setPublicBoards(data);
     } catch (error) {
       console.error('Error fetching public boards:', error);
