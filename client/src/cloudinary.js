@@ -20,7 +20,8 @@ export const uploadToCloudinary = async (file) => {
     }
 
     const data = await response.json();
-    return { success: true, url: data.secure_url };
+    // Serve a small, auto-format avatar instead of the full original upload.
+    return { success: true, url: data.secure_url.replace('/upload/', '/upload/c_fill,g_face,w_256,h_256,f_auto,q_auto/') };
   } catch (error) {
     console.error('Error uploading to Cloudinary:', error);
     return { success: false, message: error.message };

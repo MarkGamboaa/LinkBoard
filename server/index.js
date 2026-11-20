@@ -344,21 +344,34 @@ app.get('/api/invites/:token', async (request, reply) => {
 
 app.post('/api/invites/:token/accept', async (request, reply) => {
   const tokenHash = createHash('sha256').update(request.params.token).digest('hex');
-  const invite = await prisma.boardInvite.findUnique({ where: { tokenHash } });
+  const invite = await prisma.boardInvite.findUnique({
+    where: { tokenHash },
+    include: { board: { select: { ownerUid: true } } },
+  });
   if (!invite || invite.acceptedAt || invite.expiresAt <= new Date()) {
     return reply.code(404).send({ error: 'This invite is invalid, expired, or already used' });
+  }
+  if (invite.board.ownerUid === request.user.uid) {
+    return reply.code(400).send({ error: 'You already own this board' });
   }
 
   const userEmail = String(request.user.email || '').trim().toLowerCase();
 
-  await prisma.$transaction([
-    prisma.boardMember.upsert({
+  const accepted = await prisma.$transaction(async (tx) => {
+    // Claim the invite atomically so two people can't both use one link.
+    const claim = await tx.boardInvite.updateMany({
+      where: { id: invite.id, acceptedAt: null },
+      data: { acceptedAt: new Date() },
+    });
+    if (!claim.count) return false;
+    await tx.boardMember.upsert({
       where: { boardId_userUid: { boardId: invite.boardId, userUid: request.user.uid } },
       create: { boardId: invite.boardId, userUid: request.user.uid, email: userEmail },
       update: { email: userEmail },
-    }),
-    prisma.boardInvite.update({ where: { id: invite.id }, data: { acceptedAt: new Date() } }),
-  ]);
+    });
+    return true;
+  });
+  if (!accepted) return reply.code(404).send({ error: 'This invite is invalid, expired, or already used' });
   return { success: true, boardId: invite.boardId };
 });
 

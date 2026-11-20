@@ -18,24 +18,6 @@ const getTemplateLinkTextColor = (color) => {
   return brightness < 128 ? '#ffffff' : '#111827';
 };
 
-const removeGeneratedCopySuffix = async (board) => {
-  const title = String(board?.title || '').replace(/\s+\(copy\)$/i, '').trim();
-  if (!board?.isOwner || !title || title === board.title) return board;
-
-  try {
-    const response = await apiFetch(`/api/boards/${encodeURIComponent(board._id)}`, {
-      method: 'PUT',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ title }),
-    });
-    if (!response.ok) throw new Error(`HTTP ${response.status}`);
-    return await response.json();
-  } catch (error) {
-    console.error(`Could not remove generated copy suffix from board ${board._id}:`, error);
-    return board;
-  }
-};
-
 export default function DashboardPage({ onLogout, user: initialUser, onProfile, onPublic, pendingBoardCopyId = null, onPendingBoardCopyHandled }) {
   const [user, setUser] = useState(initialUser);
   const [userProfile, setUserProfile] = useState(null);
@@ -133,9 +115,7 @@ export default function DashboardPage({ onLogout, user: initialUser, onProfile, 
         const response = await apiFetch(`/api/boards/${encodeURIComponent(pendingBoardCopyId)}/copy`, { method: 'POST' });
         const result = await response.json().catch(() => ({}));
         if (!response.ok) throw new Error(result.error || 'Could not copy this board. Please try again.');
-        const cleanedResult = await removeGeneratedCopySuffix(result);
-        result.title = cleanedResult.title;
-        setBoards((current) => [...current, cleanedResult]);
+        setBoards((current) => [...current, result]);
         window.showToast?.(`Copied as “${result.title}” to your private boards.`, 'success');
       } catch (error) {
         window.showToast?.(error.message || 'Could not copy this board. Please try again.', 'error');
@@ -158,9 +138,7 @@ export default function DashboardPage({ onLogout, user: initialUser, onProfile, 
         throw new Error(`HTTP error! status: ${response.status}`);
       }
       
-      const data = await response.json();
-      const cleanedBoards = await Promise.all(data.map(removeGeneratedCopySuffix));
-      setBoards(cleanedBoards);
+      setBoards(await response.json());
     } catch (error) {
       console.error('Error fetching boards:', error);
     } finally {
@@ -215,20 +193,21 @@ export default function DashboardPage({ onLogout, user: initialUser, onProfile, 
       setSlidingBoards(new Set());
     }, 400);
 
-    // Update order in backend
+    // Save only the order, and only for owned boards that moved; sending the whole board rewrote every link.
     try {
-      const updatePromises = newBoards.map((board, index) => 
-        apiFetch(`/api/boards/${board._id}`, {
+      const responses = await Promise.all(newBoards
+        .map((board, index) => ({ board, index }))
+        .filter(({ board, index }) => board.isOwner && board.order !== index)
+        .map(({ board, index }) => apiFetch(`/api/boards/${board._id}`, {
           method: 'PUT',
-          headers: {
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify({ ...board, order: index })
-        })
-      );
-      await Promise.all(updatePromises);
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ order: index }),
+        })));
+      if (responses.some((response) => !response.ok)) throw new Error('Could not save the new board order.');
+      setBoards((current) => current.map((board, index) => board.isOwner ? { ...board, order: index } : board));
     } catch (error) {
       console.error('Error updating board order:', error);
+      window.showToast?.('Could not save the new board order. Please try again.', 'error');
     }
   };
 
@@ -294,7 +273,7 @@ export default function DashboardPage({ onLogout, user: initialUser, onProfile, 
       });
       const result = await response.json().catch(() => ({}));
       if (!response.ok) throw new Error(result.error || 'Could not update this board.');
-      setBoards((current) => current.map((item) => item._id === board._id ? { ...result, ownerName: result.ownerName || item.ownerName } : item));
+      setBoards((current) => current.map((item) => item._id === board._id ? { ...result, ownerName: result.ownerName || item.ownerName, members: item.members } : item));
       setEditingBoardTitle(false);
     } catch (error) {
       setBoardActionError(error.message || 'Could not update this board.');
@@ -381,7 +360,7 @@ export default function DashboardPage({ onLogout, user: initialUser, onProfile, 
       }
 
       setBoards(currentBoards => currentBoards.map((board, i) =>
-        i === addLinkModal.boardIdx ? { ...result, ownerName: result.ownerName || board.ownerName } : board
+        i === addLinkModal.boardIdx ? { ...result, ownerName: result.ownerName || board.ownerName, members: board.members } : board
       ));
       setAddLinkModal({ open: false, boardIdx: null, linkIdx: null });
       setNewLinkTitle("");
@@ -412,14 +391,14 @@ export default function DashboardPage({ onLogout, user: initialUser, onProfile, 
         body: JSON.stringify({ links: updatedLinks })
       });
 
-      if (response.ok) {
-        const updatedBoard = await response.json();
-        setBoards(boards => boards.map((board, i) => 
-          i === boardIdx ? { ...updatedBoard, ownerName: updatedBoard.ownerName || board.ownerName } : board
-        ));
-      }
+      if (!response.ok) throw new Error(`HTTP ${response.status}`);
+      const updatedBoard = await response.json();
+      setBoards(boards => boards.map((board, i) =>
+        i === boardIdx ? { ...updatedBoard, ownerName: updatedBoard.ownerName || board.ownerName, members: board.members } : board
+      ));
     } catch (error) {
       console.error('Error deleting link:', error);
+      window.showToast?.('Could not delete the link. Please try again.', 'error');
     } finally {
       setDeletingLinkLoading(false);
     }
@@ -438,14 +417,14 @@ export default function DashboardPage({ onLogout, user: initialUser, onProfile, 
         body: JSON.stringify({ links: newLinks })
       });
 
-      if (response.ok) {
-        const updatedBoard = await response.json();
-        setBoards(boards => boards.map((board, i) => 
-          i === boardIdx ? { ...updatedBoard, ownerName: updatedBoard.ownerName || board.ownerName } : board
-        ));
-      }
+      if (!response.ok) throw new Error(`HTTP ${response.status}`);
+      const updatedBoard = await response.json();
+      setBoards(boards => boards.map((board, i) =>
+        i === boardIdx ? { ...updatedBoard, ownerName: updatedBoard.ownerName || board.ownerName, members: board.members } : board
+      ));
     } catch (error) {
       console.error('Error reordering links:', error);
+      window.showToast?.('Could not save the new link order. Please try again.', 'error');
     }
   };
 
@@ -460,20 +439,17 @@ export default function DashboardPage({ onLogout, user: initialUser, onProfile, 
         headers: {
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify({ ...boardToUpdate, isPublic: newIsPublic })
+        body: JSON.stringify({ isPublic: newIsPublic })
       });
 
-      if (response.ok) {
-        const updatedBoard = await response.json();
-        setBoards(boards => boards.map((board, i) => 
-          i === boardIdx ? { ...updatedBoard, ownerName: updatedBoard.ownerName || board.ownerName } : board
-        ));
-      } else {
-        const errorText = await response.text();
-        console.error('Toggle error response:', errorText);
-      }
+      if (!response.ok) throw new Error(`HTTP ${response.status}`);
+      const updatedBoard = await response.json();
+      setBoards(boards => boards.map((board, i) =>
+        i === boardIdx ? { ...updatedBoard, ownerName: updatedBoard.ownerName || board.ownerName, members: board.members } : board
+      ));
     } catch (error) {
       console.error('Error toggling public/private:', error);
+      window.showToast?.('Could not change board visibility. Please try again.', 'error');
     }
   };
 
