@@ -7,7 +7,7 @@ import LoadingSpinner from "./components/LoadingSpinner.jsx";
 import Modal from "./components/Modal.jsx";
 import { apiFetch, getUserProfile } from "./firebase";
 import { BOARD_TEMPLATES } from "./data/boardTemplates";
-import { fetchLinkPreview, getDomain, normalizeUrl } from "./utils/linkPreview";
+import { fetchLinkPreview, getSiteName, normalizeUrl } from "./utils/linkPreview";
 import { matchBoard } from "./utils/search";
 
 const UNDO_DELAY_MS = 6000;
@@ -282,7 +282,7 @@ export default function DashboardPage({ onLogout, user: initialUser, onProfile, 
       const data = await fetchLinkPreview(url);
       if (cancelled) return;
       setLinkPreview({ url, status: 'done', data });
-      if (!titleTouched.current) setNewLinkTitle(data.siteTitle || getDomain(url));
+      if (!titleTouched.current) setNewLinkTitle(data.siteTitle || getSiteName(url));
     }, 450);
     return () => {
       cancelled = true;
@@ -322,7 +322,7 @@ export default function DashboardPage({ onLogout, user: initialUser, onProfile, 
       // New or changed URL: replace all preview metadata so an old site's preview never lingers.
       const preview = !needsLookup ? {} : linkPreview.url === url && linkPreview.status === 'done' ? linkPreview.data : await fetchLinkPreview(url);
       const fields = {
-        title: newLinkTitle.trim() || preview.siteTitle || previousLink?.title || getDomain(url),
+        title: newLinkTitle.trim() || preview.siteTitle || previousLink?.title || getSiteName(url),
         url,
         tags: [...new Set(newLinkTags.split(',').map((tag) => tag.trim().toLowerCase()).filter(Boolean))],
         note: newLinkNote.trim(),

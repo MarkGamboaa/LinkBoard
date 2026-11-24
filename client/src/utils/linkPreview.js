@@ -84,6 +84,17 @@ export function getDomain(url) {
   }
 }
 
+// "www.taxumo.com" -> "Taxumo", "docs.google.com" -> "Google", "bbc.co.uk" -> "Bbc"
+export function getSiteName(url) {
+  const labels = getDomain(url).split('.');
+  if (labels.length < 2) return labels[0] || '';
+  labels.pop();
+  // Drop second-level suffixes like the "co" in .co.uk or the "edu" in .edu.ph.
+  if (labels.length > 1 && /^(co|com|edu|gov|ac|org|net)$/.test(labels.at(-1))) labels.pop();
+  const name = labels.at(-1);
+  return name.charAt(0).toUpperCase() + name.slice(1);
+}
+
 export function getFaviconUrl(url) {
   try {
     const hostname = new URL(url).hostname;
