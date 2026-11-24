@@ -55,6 +55,27 @@ export function normalizeUrl(input) {
   }
 }
 
+// YouTube serves thumbnails at a fixed address, so video links get a preview without any lookup service.
+export function getYouTubeId(url) {
+  try {
+    const { hostname, pathname, searchParams } = new URL(url);
+    const host = hostname.replace(/^(www\.|m\.|music\.)/, '');
+    let id = null;
+    if (host === 'youtu.be') id = pathname.slice(1).split('/')[0];
+    else if (host === 'youtube.com' || host === 'youtube-nocookie.com') {
+      id = searchParams.get('v') || pathname.match(/^\/(?:shorts|embed|live|v)\/([^/?#]+)/)?.[1] || null;
+    }
+    return id && /^[\w-]{11}$/.test(id) ? id : null;
+  } catch {
+    return null;
+  }
+}
+
+export const getYouTubeThumbnail = (url) => {
+  const id = getYouTubeId(url);
+  return id ? `https://i.ytimg.com/vi/${id}/hqdefault.jpg` : null;
+};
+
 export function getDomain(url) {
   try {
     return new URL(url).hostname.replace(/^www\./, '');

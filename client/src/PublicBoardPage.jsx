@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from "react";
 import BrandLogo from "./BrandLogo";
 import Masonry from "react-masonry-css";
-import { masonryColumns } from "./utils/masonry";
+import { boardAreaWidth, masonryColumns } from "./utils/masonry";
 import LinkCard from "./LinkCard";
 import LoadingSpinner from "./components/LoadingSpinner.jsx";
 import { apiFetch, auth } from "./firebase";
@@ -84,7 +84,7 @@ export default function PublicBoardPage({ onLogin, onSignup, onBackToDashboard, 
   return (
     <div className="min-h-screen flex flex-col">
       <div className="max-w-[1800px] mx-auto w-full">
-        <header className="flex flex-row justify-between items-center p-4 sm:p-6 gap-2 sm:gap-0">
+        <header className="cover-band flex items-center justify-between gap-2 px-4 py-3 sm:px-10 sm:py-4">
           <h1><BrandLogo /></h1>
           {/* Desktop menu */}
           <div className="hidden sm:flex gap-4 items-center">
@@ -98,7 +98,7 @@ export default function PublicBoardPage({ onLogin, onSignup, onBackToDashboard, 
                 <button className="btn btn-sm btn-ghost" onClick={onLogin}>
                   Login
                 </button>
-                <button className="btn btn-sm btn-white shadow" onClick={onSignup}>
+                <button className="btn btn-sm border-0 bg-white text-primary shadow-none hover:bg-white/90" onClick={onSignup}>
                   Sign Up
                 </button>
               </>
@@ -116,7 +116,7 @@ export default function PublicBoardPage({ onLogin, onSignup, onBackToDashboard, 
                 <button className="btn btn-sm btn-ghost" onClick={onLogin}>
                   Login
                 </button>
-                <button className="btn btn-sm btn-white shadow" onClick={onSignup}>
+                <button className="btn btn-sm border-0 bg-white text-primary shadow-none hover:bg-white/90" onClick={onSignup}>
                   Sign Up
                 </button>
               </>
@@ -146,6 +146,7 @@ export default function PublicBoardPage({ onLogin, onSignup, onBackToDashboard, 
                 </div>
                 
                 {/* Public Boards List */}
+                <div className="mx-auto w-full" style={{ maxWidth: boardAreaWidth(publicBoards.length) }}>
                 <Masonry breakpointCols={masonryColumns(publicBoards.length)} className="board-grid mb-4" columnClassName="board-grid-column">
                   {publicBoards.map((board, idx) => (
                     <div key={board._id || idx} className="draggable-board relative">
@@ -192,6 +193,7 @@ export default function PublicBoardPage({ onLogin, onSignup, onBackToDashboard, 
                     </div>
                   ))}
                 </Masonry>
+                </div>
                 
                 {/* Call to Action */}
                 {!isLoggedIn && (

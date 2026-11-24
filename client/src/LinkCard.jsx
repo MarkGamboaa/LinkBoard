@@ -1,5 +1,5 @@
-import { useRef, useState } from "react";
-import { getDomain, getFaviconUrl } from "./utils/linkPreview";
+import { useState } from "react";
+import { getDomain, getFaviconUrl, getYouTubeThumbnail } from "./utils/linkPreview";
 import { matchBoard } from "./utils/search";
 
 const COMPACT_LIMIT = 5;
@@ -29,7 +29,8 @@ export function Favicon({ link, size = 16 }) {
 
 function PreviewImage({ link }) {
   const [failed, setFailed] = useState(false);
-  if (!link.previewImageUrl || failed) {
+  const src = link.previewImageUrl || getYouTubeThumbnail(link.url);
+  if (!src || failed) {
     return (
       <div className="grid h-full place-items-center">
         <Favicon link={link} size={32} />
@@ -37,7 +38,7 @@ function PreviewImage({ link }) {
     );
   }
   return (
-    <img src={link.previewImageUrl} alt="" loading="lazy" referrerPolicy="no-referrer" onError={() => setFailed(true)} className="h-full w-full object-cover" />
+    <img src={src} alt="" loading="lazy" referrerPolicy="no-referrer" onError={() => setFailed(true)} className="h-full w-full object-cover" />
   );
 }
 
@@ -54,59 +55,10 @@ function Tags({ tags }) {
 
 const iconButton = "flex h-8 w-8 items-center justify-center rounded-md text-steel transition-colors hover:bg-base-200 hover:text-base-content disabled:cursor-not-allowed disabled:opacity-50";
 
-/**
- * Keyboard- and touch-friendly reordering, alongside mouse drag. A plain button group in a native
- * popover (not an ARIA menu): Tab moves between the four actions, Esc or an outside click closes it.
- */
-export function MoveMenu({ id, label, index, count, onMove }) {
-  const popover = useRef(null);
-  if (count < 2) return null;
-  const popoverId = `move-${id}`;
-  const actions = [
-    ["Move to top", 0, index > 0],
-    ["Move up", index - 1, index > 0],
-    ["Move down", index + 1, index < count - 1],
-    ["Move to bottom", count - 1, index < count - 1],
-  ];
-  return (
-    <>
-      <button
-        type="button"
-        popoverTarget={popoverId}
-        className={iconButton}
-        style={{ anchorName: `--${popoverId}` }}
-        aria-label={`Move ${label}`}
-        title="Move"
-      >
-        <svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" className="h-4 w-4">
-          <path d="M8 4v16M8 4 4.5 7.5M8 4l3.5 3.5M16 20V4m0 16-3.5-3.5M16 20l3.5-3.5" />
-        </svg>
-      </button>
-      <div id={popoverId} ref={popover} popover="auto" className="move-menu" style={{ positionAnchor: `--${popoverId}` }} aria-label={`Move ${label}`}>
-        {actions.map(([text, to, enabled]) => (
-          <button
-            key={text}
-            type="button"
-            disabled={!enabled}
-            onClick={() => {
-              // Close first: hiding returns focus to the trigger, which then travels with the moved row.
-              popover.current?.hidePopover();
-              onMove(index, to);
-            }}
-          >
-            {text}
-          </button>
-        ))}
-      </div>
-    </>
-  );
-}
-
-function LinkActions({ link, onEdit, onDelete, move }) {
+function LinkActions({ link, onEdit, onDelete }) {
   const name = link.title || link.siteTitle || "link";
   return (
     <div className="flex shrink-0 items-center">
-      {move}
       {onEdit && (
         <button type="button" onClick={onEdit} className={iconButton} aria-label={`Edit ${name}`} title="Edit link">
           <svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" className="h-4 w-4">
@@ -217,18 +169,17 @@ export default function LinkCard({
       link={link}
       onEdit={onEditLink ? () => onEditLink(index) : null}
       onDelete={onDeleteLink ? () => onDeleteLink(index) : null}
-      move={canDrag ? <MoveMenu id={link._id} label={link.title || "link"} index={index} count={links.length} onMove={moveLink} /> : null}
     />
   ) : null);
 
   const title = (link) => link.title || link.siteTitle || getDomain(link.url);
 
   const compactRow = ({ link, index }) => (
-    <li key={link._id || index} {...dragProps(index)} className={`draggable-link ${draggedLinkIndex === index ? "dragging" : ""}`}>
-      <a href={link.url} target="_blank" rel="noopener noreferrer" className="-mx-2 flex items-center gap-2.5 rounded-md px-2 py-1.5 no-underline transition-colors hover:bg-base-200">
+    <li key={link._id || index} {...dragProps(index)} className={`draggable-link border-t border-hairline ${draggedLinkIndex === index ? "dragging" : ""}`}>
+      <a href={link.url} target="_blank" rel="noopener noreferrer" className="flex min-h-9 items-center gap-2.5 px-5 py-1.5 no-underline transition-colors hover:bg-surface">
         <Favicon link={link} />
-        <span className="min-w-0 flex-1 truncate text-sm font-medium text-base-content">{title(link)}</span>
-        <span className="max-w-[40%] shrink-0 truncate text-xs text-steel">{getDomain(link.url)}</span>
+        <span className="min-w-0 flex-1 truncate text-[15px] font-semibold text-base-content">{title(link)}</span>
+        <span className="max-w-[45%] shrink-0 truncate text-[13px] tabular-nums text-steel">{getDomain(link.url)}</span>
       </a>
     </li>
   );
@@ -313,48 +264,57 @@ export default function LinkCard({
     );
   }
 
+  const footerRow = "flex w-full items-center gap-2 border-t border-hairline px-5 py-2.5 text-left text-sm transition-colors hover:bg-surface";
+
   return (
     <div
-      className={`card-enter flex ${className} flex-col rounded-xl border border-hairline bg-card p-4 ${onOpen ? "card-hover cursor-pointer" : ""}`}
+      className={`card-enter flex ${className} flex-col overflow-hidden rounded-[14px] border border-hairline-strong bg-card shadow-[0_6px_18px_-10px_rgb(70_50_230/0.35)] ${onOpen ? "card-hover cursor-pointer" : ""}`}
       onClick={(event) => {
         if (onOpen && !event.target.closest("a, button, input, label, [popover]")) onOpen();
       }}
     >
       {!hideHeader && (
-        <div className="mb-3 flex items-start justify-between gap-2">
-          <div className="flex min-w-0 flex-1 flex-col">
+        <div className="flex items-start gap-2.5 px-5 pb-3 pt-4">
+          <div className="min-w-0 flex-1">
             {/* A heading per board lets screen-reader users jump between boards. */}
-            <h2 className="min-w-0 break-words text-base font-semibold text-base-content [overflow-wrap:anywhere]">
+            <h2 className="break-words text-2xl font-extrabold leading-tight tracking-[-0.02em] text-base-content [overflow-wrap:anywhere]">
               {onOpen ? (
                 <button type="button" onClick={onOpen} className="text-left hover:underline">{category}</button>
               ) : category}
             </h2>
-            {(ownerLabel || userEmail) && <span className="mt-0.5 text-xs text-steel">by {ownerLabel || userEmail}</span>}
+            {(ownerLabel || userEmail) && <p className="mt-0.5 text-xs text-steel">by {ownerLabel || userEmail}</p>}
           </div>
-          <div className="flex shrink-0 items-center gap-2">
+          <div className="flex shrink-0 items-center gap-2 pt-1">
             {headerAction}
             {!isReadOnly && isOwner && onTogglePublic && (
               <button
                 type="button"
                 onClick={onTogglePublic}
-                className={`min-h-7 rounded-md border px-2 py-1 text-xs font-medium transition-colors ${isPublic ? "border-success/30 bg-success/10 text-success hover:bg-success/15" : "border-hairline-strong text-slate hover:bg-base-200"}`}
+                className={`min-h-7 rounded-full border-[1.5px] px-2.5 text-xs font-bold transition-colors ${isPublic ? "border-success text-success hover:bg-success/10" : "border-hairline-strong text-slate hover:border-primary hover:text-primary"}`}
                 aria-label={isPublic ? `${category} is public. Make it private` : `${category} is private. Make it public`}
               >
                 {isPublic ? "Public" : "Private"}
               </button>
             )}
           </div>
+          {/* Size, not weight, carries the count: one light numeral in the logo blue. */}
+          <span className="shrink-0 text-2xl font-light leading-tight tabular-nums text-blue" aria-hidden="true">{links.length}</span>
+          <span className="sr-only">{links.length} {links.length === 1 ? "link" : "links"}</span>
         </div>
       )}
-      {shownLinks.length > 0 && <ul className="mb-2 flex flex-col">{shownLinks.map(compactRow)}</ul>}
-      {isFiltering && visibleLinks.length === 0 && <p className="mb-2 text-xs text-steel">No matching links in this board.</p>}
-      {!isFiltering && visibleLinks.length === 0 && !isReadOnly && <p className="mb-2 text-sm text-steel">No links yet.</p>}
+      {shownLinks.length > 0 && <ul className="flex flex-col">{shownLinks.map(compactRow)}</ul>}
+      {isFiltering && visibleLinks.length === 0 && <p className="border-t border-hairline px-5 py-3 text-sm text-steel">No matching links in this board.</p>}
+      {!isFiltering && visibleLinks.length === 0 && !isReadOnly && <p className="border-t border-hairline px-5 py-3 text-sm text-steel">No links yet.</p>}
       {hiddenCount > 0 && (
-        <button type="button" onClick={onOpen} className="mb-1 self-start text-sm font-medium text-link hover:underline">
+        <button type="button" onClick={onOpen} className={`${footerRow} font-semibold text-link`}>
           View all {visibleLinks.length} links
         </button>
       )}
-      {addButton}
+      {!isReadOnly && onAddLink && (
+        <button type="button" onClick={onAddLink} disabled={isAddingLink} className={`${footerRow} font-bold text-primary disabled:opacity-60`}>
+          <span aria-hidden="true">+</span> {isAddingLink ? "Adding…" : "Add link"}
+        </button>
+      )}
       {footerAction}
     </div>
   );

@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef } from "react";
 import BrandLogo from "./BrandLogo";
 import Masonry from "react-masonry-css";
-import { masonryColumns } from "./utils/masonry";
+import { boardAreaWidth, masonryColumns } from "./utils/masonry";
 import LinkCard, { Favicon } from "./LinkCard";
 import LoadingSpinner from "./components/LoadingSpinner.jsx";
 import Modal from "./components/Modal.jsx";
@@ -317,8 +317,10 @@ export default function DashboardPage({ onLogout, user: initialUser, onProfile, 
       if (!board) throw new Error('Could not find this board. Refresh the page and try again.');
       const previousLink = addLinkModal.linkIdx === null ? null : board.links?.[addLinkModal.linkIdx];
       const urlChanged = previousLink?.url !== url;
+      // Links saved while the preview service was unavailable have no favicon; re-check them on save.
+      const needsLookup = urlChanged || !previousLink?.faviconUrl;
       // New or changed URL: replace all preview metadata so an old site's preview never lingers.
-      const preview = !urlChanged ? {} : linkPreview.url === url && linkPreview.status === 'done' ? linkPreview.data : await fetchLinkPreview(url);
+      const preview = !needsLookup ? {} : linkPreview.url === url && linkPreview.status === 'done' ? linkPreview.data : await fetchLinkPreview(url);
       const fields = {
         title: newLinkTitle.trim() || preview.siteTitle || previousLink?.title || getDomain(url),
         url,
@@ -332,6 +334,11 @@ export default function DashboardPage({ onLogout, user: initialUser, onProfile, 
           previewImageUrl: preview.previewImageUrl ?? null,
           faviconUrl: preview.faviconUrl ?? null,
         });
+      } else {
+        // Same URL: only fill in what the lookup found, so an empty or rate-limited lookup never wipes saved details.
+        for (const key of ['siteTitle', 'description', 'previewImageUrl', 'faviconUrl']) {
+          if (preview[key]) fields[key] = preview[key];
+        }
       }
 
       const response = await apiFetch(
@@ -454,27 +461,38 @@ export default function DashboardPage({ onLogout, user: initialUser, onProfile, 
 
   // Visibility flips on screen immediately; the save runs in the background and is undone only if it fails.
   const visibilityRequests = useRef(new Map());
-  const handleTogglePublic = async (boardIdx) => {
+  // Saves for one board run one after another: sent in parallel, a slow earlier save could land last
+  // and leave the server on the opposite of what the screen shows.
+  const visibilityQueue = useRef(new Map());
+  // Latest intended visibility per board: rapid clicks can land before a re-render, so they read this, not the render.
+  const visibilityIntent = useRef(new Map());
+  const handleTogglePublic = (boardIdx) => {
     const board = boards[boardIdx];
     if (!board) return;
-    const isPublic = !board.isPublic;
+    const isPublic = !(visibilityIntent.current.get(board._id) ?? board.isPublic);
+    visibilityIntent.current.set(board._id, isPublic);
     const request = (visibilityRequests.current.get(board._id) || 0) + 1;
     visibilityRequests.current.set(board._id, request);
     setBoards((current) => current.map((item) => (item._id === board._id ? { ...item, isPublic } : item)));
-    try {
-      const response = await apiFetch(`/api/boards/${board._id}`, {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ isPublic }),
-      });
-      if (!response.ok) throw new Error(await readError(response, `HTTP ${response.status}`));
-    } catch (error) {
-      console.error('Error toggling public/private:', error);
-      // A newer click already decided the state; only the latest request may roll back.
-      if (visibilityRequests.current.get(board._id) !== request) return;
-      setBoards((current) => current.map((item) => (item._id === board._id ? { ...item, isPublic: !isPublic } : item)));
-      window.showToast?.('Could not change board visibility. Please try again.', 'error');
-    }
+    const save = async () => {
+      try {
+        const response = await apiFetch(`/api/boards/${board._id}`, {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ isPublic }),
+        });
+        if (!response.ok) throw new Error(await readError(response, `HTTP ${response.status}`));
+      } catch (error) {
+        console.error('Error toggling public/private:', error);
+        // A newer click already decided the state; only the latest request may roll back.
+        if (visibilityRequests.current.get(board._id) !== request) return;
+        visibilityIntent.current.set(board._id, !isPublic);
+        setBoards((current) => current.map((item) => (item._id === board._id ? { ...item, isPublic: !isPublic } : item)));
+        window.showToast?.('Could not change board visibility. Please try again.', 'error');
+      }
+    };
+    const queued = (visibilityQueue.current.get(board._id) || Promise.resolve()).then(save);
+    visibilityQueue.current.set(board._id, queued);
   };
 
   // Logout handler with loading state
@@ -590,7 +608,6 @@ export default function DashboardPage({ onLogout, user: initialUser, onProfile, 
     .map((board, index) => ({ board, index, matches: matchBoard(board, normalizedSearch) }))
     .filter(({ matches }) => matches !== null);
   const matchingLinkCount = visibleBoards.reduce((total, { matches }) => total + matches.length, 0);
-  const clearFilters = () => setSearchQuery('');
 
   const selectedBoard = boards.find((board) => board._id === selectedBoardId) || null;
   const selectedBoardIndex = selectedBoard ? boards.findIndex((board) => board._id === selectedBoard._id) : -1;
@@ -602,11 +619,28 @@ export default function DashboardPage({ onLogout, user: initialUser, onProfile, 
 
   return (
     <div className="min-h-screen flex flex-col">
-      <div className="max-w-[1800px] mx-auto w-full">
-        <header className="flex flex-row justify-between items-center p-4 sm:p-6 gap-2 sm:gap-0">
-                      <h1><BrandLogo /></h1>
+      <div className="w-full">
+        <header className="cover-band flex flex-wrap items-center gap-x-6 gap-y-3 px-4 py-3 sm:px-10 sm:py-4">
+          <BrandLogo />
+          <div className="order-last flex w-full min-w-0 items-center gap-3 sm:order-none sm:w-auto sm:max-w-2xl sm:flex-1">
+            <label className="sr-only" htmlFor="board-link-search">Search boards and links</label>
+            <div className="relative min-w-0 flex-1">
+              <input
+                id="board-link-search"
+                type="search"
+                className={`band-search input w-full ${searchQuery ? '' : 'sm:pr-10'}`}
+                placeholder="Search boards and links…"
+                aria-keyshortcuts="/"
+                value={searchQuery}
+                onChange={(event) => setSearchQuery(event.target.value)}
+              />
+              {!searchQuery && (
+                <kbd className="pointer-events-none absolute right-3 top-1/2 hidden -translate-y-1/2 rounded border border-white/40 px-1.5 text-xs text-white/85 sm:block" aria-hidden="true">/</kbd>
+              )}
+            </div>
+          </div>
           {/* Desktop menu */}
-          <div className="hidden sm:flex gap-4 items-center">
+          <div className="ml-auto hidden items-center gap-1 sm:flex">
             <button className="btn btn-sm btn-ghost" onClick={onPublic}>
               <svg className="inline-block w-5 h-5 mr-1" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><path d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6" /></svg>
               Public Boards
@@ -615,7 +649,7 @@ export default function DashboardPage({ onLogout, user: initialUser, onProfile, 
               <svg className="inline-block w-5 h-5 mr-1" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><path d="M5.121 17.804A13.937 13.937 0 0112 15c2.5 0 4.847.655 6.879 1.804M15 11a3 3 0 11-6 0 3 3 0 016 0z" /></svg>
               Hi, {getUserNickname()}
             </button>
-            <button className={`btn btn-sm btn-white shadow ${logoutLoading ? 'enhanced-button-loading' : ''}`} onClick={handleLogout} disabled={logoutLoading}>
+            <button className={`btn btn-sm btn-ghost ${logoutLoading ? 'enhanced-button-loading' : ''}`} onClick={handleLogout} disabled={logoutLoading}>
               {logoutLoading ? (
                 <>
                   <span className="enhanced-button-spinner w-3 h-3"></span>
@@ -629,7 +663,7 @@ export default function DashboardPage({ onLogout, user: initialUser, onProfile, 
             </button>
           </div>
           {/* Mobile menu */}
-          <div className="sm:hidden flex items-center relative">
+          <div className="relative ml-auto flex items-center sm:hidden">
             <button className="btn btn-sm btn-ghost" popoverTarget="dashboard-menu" style={{ anchorName: '--dashboard-menu' }} aria-label="Menu">
               <svg aria-hidden="true" className="w-6 h-6" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" d="M4 6h16M4 12h16M4 18h16" />
@@ -660,47 +694,37 @@ export default function DashboardPage({ onLogout, user: initialUser, onProfile, 
               </div>
           </div>
         </header>
-        <main className="flex-1 flex flex-col items-center justify-start px-2 sm:px-6">
-          <div className="flex w-full flex-col items-center p-1 pb-12 pt-4 sm:p-8">
-          <div className="w-full max-w-3xl mb-5 flex items-center justify-center gap-3">
-            <label className="sr-only" htmlFor="board-link-search">Search boards and links</label>
-            <div className="relative min-w-0 flex-1">
-              <input
-                id="board-link-search"
-                type="search"
-                className="input input-bordered w-full bg-base-100 sm:pr-10"
-                placeholder="Search boards, links, and tags…"
-                aria-keyshortcuts="/"
-                value={searchQuery}
-                onChange={(event) => setSearchQuery(event.target.value)}
-              />
-              {!searchQuery && (
-                <kbd className="pointer-events-none absolute right-3 top-1/2 hidden -translate-y-1/2 rounded border border-hairline-strong px-1.5 text-xs text-steel sm:block" aria-hidden="true">/</kbd>
+        <main className="flex-1">
+          <div className="mx-auto w-full px-4 pb-12 pt-8 sm:px-10" style={{ maxWidth: `calc(${boardAreaWidth(boards.length)} + 5rem)` }}>
+          <div className="mb-6 flex flex-wrap items-center justify-between gap-x-4 gap-y-3">
+            <h1 className="whitespace-nowrap text-3xl font-extrabold tracking-[-0.03em] text-base-content sm:text-4xl">Your boards</h1>
+            <div className="ml-auto flex shrink-0 items-center gap-2">
+              {isFiltering && (
+                <button type="button" className="btn btn-ghost font-semibold text-link hover:bg-surface" onClick={() => setSearchQuery('')}>
+                  Clear search
+                </button>
               )}
+              <button
+                type="button"
+                className="btn btn-primary shrink-0 font-bold"
+                onClick={() => {
+                  setModalOpen(true);
+                  setNewBoardTemplateId('blank');
+                  setNewBoardTitle('');
+                  setCreateBoardError('');
+                }}
+              >
+                <span aria-hidden="true">+</span> New board
+              </button>
             </div>
-            <button
-              className="btn btn-primary flex shrink-0 items-center gap-2"
-              onClick={() => {
-                setModalOpen(true);
-                setNewBoardTemplateId('blank');
-                setNewBoardTitle('');
-                setCreateBoardError('');
-              }}
-            >
-              Add Board <span className="text-xl">+</span>
-            </button>
           </div>
-          <div className={isFiltering ? 'mb-4 flex w-full max-w-3xl items-center justify-between gap-3 text-sm' : 'sr-only'}>
-            {/* Always mounted so screen readers hear the count change as the user types. */}
-            <p className="text-slate" role="status">
-              {!isFiltering ? '' : visibleBoards.length === 0
-                ? `No boards or links match “${searchQuery.trim()}”.`
-                : `${matchingLinkCount} ${matchingLinkCount === 1 ? 'link' : 'links'} in ${visibleBoards.length} ${visibleBoards.length === 1 ? 'board' : 'boards'}`}
-            </p>
-            {isFiltering && (
-              <button type="button" className="shrink-0 font-medium text-link hover:underline" onClick={clearFilters}>Clear search</button>
-            )}
-          </div>
+          {/* Always mounted so screen readers hear the result count change as the user types;
+              only the no-results message is shown on screen. */}
+          <p role="status" className={isFiltering && visibleBoards.length === 0 ? 'py-12 text-center text-slate' : 'sr-only'}>
+            {!isFiltering ? '' : visibleBoards.length === 0
+              ? `No boards or links match “${searchQuery.trim()}”.`
+              : `${matchingLinkCount} ${matchingLinkCount === 1 ? 'link' : 'links'} in ${visibleBoards.length} ${visibleBoards.length === 1 ? 'board' : 'boards'}`}
+          </p>
           {/* Boards List */}
           <Masonry breakpointCols={masonryColumns(boards.length)} className="board-grid mb-4" columnClassName="board-grid-column">
             {visibleBoards.map(({ board, index: idx }) => (

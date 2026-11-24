@@ -2,7 +2,6 @@ import React, { useState, useEffect, useRef } from "react";
 import BrandLogo from "./BrandLogo";
 import { updateUserProfile, getUserProfile, uploadProfileImage, deleteProfileImage, changeUserPassword, validatePassword, deleteUserAccount } from "./firebase";
 import LoadingSpinner from "./components/LoadingSpinner.jsx";
-import ThemeSetting from "./components/ThemeSetting.jsx";
 import Modal from "./components/Modal.jsx";
 
 import { auth } from "./firebase";
@@ -320,6 +319,10 @@ export default function ProfilePage({ user, onBack, onLogout, onUserUpdate }) {
     }
   };
 
+  const memberSince = user?.metadata?.creationTime
+    ? new Intl.DateTimeFormat(undefined, { dateStyle: 'long' }).format(new Date(user.metadata.creationTime))
+    : null;
+
   if (loading) {
     return <LoadingSpinner fullScreen text="Loading profile…" />;
   }
@@ -327,8 +330,8 @@ export default function ProfilePage({ user, onBack, onLogout, onUserUpdate }) {
   return (
     <div className="min-h-screen flex flex-col">
       <div className="max-w-[1800px] mx-auto w-full">
-        <header className="flex flex-row justify-between items-center p-4 sm:p-6 gap-2 sm:gap-0">
-                      <h1><BrandLogo /></h1>
+        <header className="cover-band flex items-center justify-between gap-2 px-4 py-3 sm:px-10 sm:py-4">
+          <BrandLogo />
           {/* Desktop menu */}
           <div className="hidden sm:flex gap-4 items-center">
             <button className="btn btn-sm btn-ghost" onClick={onBack}>
@@ -337,7 +340,7 @@ export default function ProfilePage({ user, onBack, onLogout, onUserUpdate }) {
               </svg>
               Back
             </button>
-            <button className={`btn btn-sm btn-white shadow ${logoutLoading ? 'enhanced-button-loading' : ''}`} onClick={handleLogout} disabled={logoutLoading}>
+            <button className={`btn btn-sm btn-ghost ${logoutLoading ? 'enhanced-button-loading' : ''}`} onClick={handleLogout} disabled={logoutLoading}>
               {logoutLoading ? (
                 <>
                   <span className="enhanced-button-spinner w-3 h-3"></span>
@@ -381,210 +384,114 @@ export default function ProfilePage({ user, onBack, onLogout, onUserUpdate }) {
           </div>
         </header>
 
-        <main className="flex-1 flex flex-col items-center justify-start px-4 sm:px-6">
-          <div className="flex w-full max-w-3xl flex-col items-center pt-2 sm:pt-4">
-          
-          {/* Profile Content */}
-          <div className="w-full space-y-5 sm:space-y-7 pb-4 sm:pb-8">
-            {/* Profile Header */}
-            <div className="flex flex-col items-center gap-3 text-center sm:flex-row sm:items-center sm:gap-5 sm:text-left">
-              <div className="relative inline-block group">
-                <div className="avatar">
-                  <div className="w-20 h-20 sm:w-24 sm:h-24 rounded-full">
-                    {(() => {
-                      return localPhotoURL ? (
-                        <img 
-                          src={localPhotoURL} 
-                          alt="Profile"
-                          width={96}
-                          height={96}
-                          className="w-20 h-20 sm:w-24 sm:h-24 rounded-full object-cover"
-                        />
-                      ) : (
-                        <div className="bg-primary text-primary-content rounded-full w-20 h-20 sm:w-24 sm:h-24 flex items-center justify-center">
-                          <span className="text-2xl sm:text-3xl">
-                            {userProfile ? userProfile.firstName?.charAt(0)?.toUpperCase() : 
-                             user?.displayName ? user.displayName.charAt(0).toUpperCase() : 'U'}
-                          </span>
-                        </div>
-                      );
-                    })()}
-                  </div>
-                </div>
-                
-                {/* Edit overlay - appears on hover */}
-                <div className="absolute inset-0 bg-black/50 rounded-full opacity-0 group-hover:opacity-100 transition-opacity duration-200 flex items-center justify-center">
-                  <button
-                    className="btn btn-circle btn-sm btn-primary"
-                    onClick={() => fileInputRef.current?.click()}
-                    disabled={uploadingImage}
-                    title="Edit profile picture"
-                  >
-                    {uploadingImage ? (
-                      <span className="enhanced-button-spinner w-3 h-3"></span>
-                    ) : (
-                      <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
-                      </svg>
-                    )}
-                  </button>
-                </div>
-                
-                {/* Delete button - only show if image exists */}
+        <main className="mx-auto w-full max-w-3xl flex-1 px-4 pb-16 pt-8 sm:px-6">
+          <div className="flex flex-col gap-6">
+            {/* Identity */}
+            <section className="sheet flex flex-col items-center gap-5 px-6 py-6 text-center sm:flex-row sm:text-left">
+              {localPhotoURL ? (
+                <img src={localPhotoURL} alt="" width={88} height={88} className="h-22 w-22 shrink-0 rounded-full object-cover ring-4 ring-surface" />
+              ) : (
+                <span aria-hidden="true" className="grid h-22 w-22 shrink-0 place-items-center rounded-full bg-primary text-3xl font-extrabold text-primary-content ring-4 ring-surface">
+                  {(userProfile?.nickname || firstName || user?.email || 'U').charAt(0).toUpperCase()}
+                </span>
+              )}
+              <div className="min-w-0 flex-1">
+                <h1 className="break-words text-3xl font-extrabold tracking-[-0.02em] text-base-content">
+                  {userProfile?.nickname || 'Add a nickname'}
+                </h1>
+                <p className="mt-1 break-all text-slate">{user?.email}</p>
+                {memberSince && <p className="mt-0.5 text-sm text-steel">Member since {memberSince}</p>}
+              </div>
+              <div className="flex shrink-0 flex-wrap justify-center gap-2 sm:flex-col sm:items-stretch">
+                <button type="button" className="btn btn-sm border-hairline-strong bg-card font-semibold text-primary hover:border-primary hover:bg-surface" onClick={() => fileInputRef.current?.click()} disabled={uploadingImage}>
+                  {uploadingImage ? 'Uploading…' : localPhotoURL ? 'Change photo' : 'Add photo'}
+                </button>
                 {localPhotoURL && (
-                  <button
-                    className="absolute -top-2 -right-2 btn btn-circle btn-xs btn-error opacity-0 group-hover:opacity-100 transition-opacity duration-200"
-                    onClick={handleDeleteImage}
-                    disabled={uploadingImage}
-                    title="Remove profile picture"
-                  >
-                    {uploadingImage ? (
-                      <span className="enhanced-button-spinner w-2 h-2"></span>
-                    ) : (
-                      <svg className="w-3 h-3" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
-                      </svg>
-                    )}
+                  <button type="button" className="btn btn-sm btn-ghost font-semibold text-error hover:bg-error/10" onClick={handleDeleteImage} disabled={uploadingImage}>
+                    Remove photo
                   </button>
                 )}
-                
-                {/* Hidden file input */}
-                <input
-                  ref={fileInputRef}
-                  type="file"
-                  accept="image/*"
-                  onChange={handleImageUpload}
-                  className="hidden"
-                />
               </div>
-              
-              <div>
-                {editMode ? (
-                  <input
-                    type="text"
-                    value={nickname}
-                    maxLength={24}
-                    onChange={(e) => setNickname(e.target.value)}
-                    className="input input-bordered input-sm w-full max-w-xs text-lg font-bold"
-                    placeholder="Nickname"
-                    aria-label="Public nickname"
-                  />
-                ) : (
-                  <h2 className="text-xl sm:text-2xl font-bold text-base-content">
-                    {userProfile?.nickname || 'Nickname not set'}
-                  </h2>
-                )}
-              </div>
-              <div className="flex items-center gap-2 sm:ml-auto">
-                {editMode && (
-                  <button
-                    className="btn btn-ghost btn-sm"
-                    onClick={handleCancelEdit}
-                    disabled={isUpdating}
-                  >
-                    Cancel
-                  </button>
-                )}
-                <button
-                  className="btn btn-primary btn-sm"
-                  onClick={editMode ? handleSaveProfile : handleEditProfile}
-                  disabled={isUpdating}
-                >
-                  {editMode ? (isUpdating ? 'Saving…' : 'Save') : 'Edit'}
+              <input ref={fileInputRef} type="file" accept="image/*" onChange={handleImageUpload} className="hidden" aria-label="Profile photo" />
+            </section>
+
+            {/* Details: ruled rows like a board sheet; Edit turns the rows into fields. */}
+            <section className="sheet" aria-labelledby="details-title">
+              <form onSubmit={(event) => { event.preventDefault(); handleSaveProfile(); }}>
+                <div className="flex items-center justify-between gap-3 px-6 pb-3 pt-5">
+                  <h2 id="details-title" className="text-xl font-extrabold tracking-[-0.01em]">Account details</h2>
+                  {editMode ? (
+                    <div className="flex gap-2">
+                      <button type="button" className="btn btn-sm btn-ghost" onClick={handleCancelEdit} disabled={isUpdating}>Cancel</button>
+                      <button type="submit" className="btn btn-sm btn-primary" disabled={isUpdating}>{isUpdating ? 'Saving…' : 'Save'}</button>
+                    </div>
+                  ) : (
+                    <button type="button" className="btn btn-sm border-hairline-strong bg-card font-semibold text-primary hover:border-primary hover:bg-surface" onClick={handleEditProfile}>Edit</button>
+                  )}
+                </div>
+                <dl>
+                  {[
+                    { id: 'profile-nickname', label: 'Nickname', value: nickname, set: setNickname, hint: 'Shown on your public boards', auto: 'nickname', max: 24 },
+                    { id: 'profile-first-name', label: 'First name', value: firstName, set: setFirstName, auto: 'given-name' },
+                    { id: 'profile-last-name', label: 'Last name', value: lastName, set: setLastName, auto: 'family-name' },
+                  ].map((field) => (
+                    <div key={field.id} className="grid grid-cols-1 gap-1 border-t border-hairline px-6 py-3 sm:grid-cols-[10rem_1fr] sm:items-center sm:gap-4">
+                      <dt className="text-sm font-semibold text-slate">
+                        {editMode ? <label htmlFor={field.id}>{field.label}</label> : field.label}
+                      </dt>
+                      <dd className="min-w-0">
+                        {editMode ? (
+                          <input
+                            id={field.id}
+                            type="text"
+                            autoComplete={field.auto}
+                            maxLength={field.max}
+                            value={field.value}
+                            onChange={(event) => field.set(event.target.value)}
+                            className="input input-sm input-bordered w-full max-w-sm"
+                          />
+                        ) : (
+                          <span className="break-words text-base-content">{field.value || <span className="text-steel">Not set</span>}</span>
+                        )}
+                        {field.hint && <p className="mt-0.5 text-xs text-steel">{field.hint}</p>}
+                      </dd>
+                    </div>
+                  ))}
+                  <div className="grid grid-cols-1 gap-1 border-t border-hairline px-6 py-3 sm:grid-cols-[10rem_1fr] sm:items-center sm:gap-4">
+                    <dt className="text-sm font-semibold text-slate">Email</dt>
+                    <dd className="min-w-0 break-all text-base-content">{user?.email}</dd>
+                  </div>
+                </dl>
+              </form>
+            </section>
+
+            {/* Security */}
+            <section className="sheet" aria-labelledby="security-title">
+              <h2 id="security-title" className="px-6 pb-3 pt-5 text-xl font-extrabold tracking-[-0.01em]">Security</h2>
+              <div className="flex flex-col gap-3 border-t border-hairline px-6 py-4 sm:flex-row sm:items-center sm:justify-between">
+                <div>
+                  <p className="font-semibold text-base-content">Password</p>
+                  <p className="text-sm text-steel">You’ll be signed out after changing it.</p>
+                </div>
+                <button type="button" className="btn btn-sm border-hairline-strong bg-card font-semibold text-primary hover:border-primary hover:bg-surface" onClick={handleChangePassword}>
+                  Change password
                 </button>
               </div>
-            </div>
+            </section>
 
-            {/* Profile Information */}
-            <div className="grid grid-cols-1 items-start gap-4 sm:gap-6">
-              <div className="card bg-card">
-                <div className="card-body p-4 sm:p-6">
-                  <h3 className="card-title col-span-full text-base sm:text-lg font-semibold">Account Information</h3>
-                  <div className="grid grid-cols-1 gap-x-6 gap-y-3 sm:grid-cols-2">
-                    <div className="flex min-w-0 flex-col gap-1">
-                      <label htmlFor="profile-first-name" className="font-medium text-charcoal text-sm sm:text-base">First Name:</label>
-                      <input
-                        id="profile-first-name"
-                        type="text"
-                        value={firstName}
-                        onChange={(e) => setFirstName(e.target.value)}
-                        readOnly={!editMode}
-                        className={`input input-bordered w-full text-base ${editMode ? 'bg-base-100' : 'bg-base-200'}`}
-                        placeholder="First Name"
-                      />
-                    </div>
-                    <div className="flex min-w-0 flex-col gap-1">
-                      <label htmlFor="profile-last-name" className="font-medium text-charcoal text-sm sm:text-base">Last Name:</label>
-                      <input
-                        id="profile-last-name"
-                        type="text"
-                        value={lastName}
-                        onChange={(e) => setLastName(e.target.value)}
-                        readOnly={!editMode}
-                        className={`input input-bordered w-full text-base ${editMode ? 'bg-base-100' : 'bg-base-200'}`}
-                        placeholder="Last Name"
-                      />
-                    </div>
-                    <div className="flex min-w-0 flex-col gap-1">
-                      <label htmlFor="profile-email" className="font-medium text-charcoal text-sm sm:text-base">Email:</label>
-                      <input
-                        id="profile-email"
-                        type="email"
-                        value={user?.email || ''}
-                        readOnly
-                        className="input input-bordered w-full text-base bg-base-200"
-                      />
-                    </div>
-                    <div className="flex min-w-0 flex-col gap-1">
-                      <label htmlFor="profile-account-created" className="font-medium text-charcoal text-sm sm:text-base">Account Created:</label>
-                      <input
-                        id="profile-account-created"
-                        type="text"
-                        value={user?.metadata?.creationTime ? new Date(user.metadata.creationTime).toLocaleDateString() : 'Unknown'}
-                        readOnly
-                        className="input input-bordered w-full text-base bg-base-200"
-                      />
-                    </div>
-                  </div>
+            {/* Delete account: separated, outlined, never the loudest thing on the page. */}
+            <section className="sheet border-error/40" aria-labelledby="delete-title">
+              <div className="flex flex-col gap-3 px-6 py-5 sm:flex-row sm:items-center sm:justify-between">
+                <div>
+                  <h2 id="delete-title" className="font-bold text-error">Delete account</h2>
+                  <p className="text-sm text-steel">Permanently deletes your profile, boards and links. This can’t be undone.</p>
                 </div>
+                <button type="button" className="btn btn-sm btn-outline border-error/60 font-semibold text-error hover:border-error hover:bg-error hover:text-error-content" onClick={handleDeleteAccount}>
+                  Delete account
+                </button>
               </div>
-
-              <div className="card bg-card">
-                <div className="p-4 sm:p-6 space-y-3">
-                  <h3 className="card-title text-base sm:text-lg font-semibold">Appearance</h3>
-                  <ThemeSetting />
-                </div>
-              </div>
-
-              {/* Account Actions */}
-              <div className="card bg-card">
-                <div className="p-4 sm:p-6 space-y-3">
-                  <h3 className="card-title text-base sm:text-lg font-semibold">Account Actions</h3>
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                    <button 
-                      className="btn btn-outline btn-primary min-w-0 whitespace-nowrap text-sm sm:text-base" 
-                      onClick={handleChangePassword}
-                    >
-                      <svg className="w-4 h-4 sm:w-5 sm:h-5 mr-1 sm:mr-2" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
-                      </svg>
-                      Change Password
-                    </button>
-                  <button 
-                    className="btn btn-error w-full text-sm sm:text-base" 
-                    onClick={handleDeleteAccount}
-                  >
-                    <svg className="w-4 h-4 sm:w-5 sm:h-5 mr-1 sm:mr-2" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-                    </svg>
-                    Delete Account
-                  </button>
-                  </div>
-                </div>
-              </div>
-            </div>
+            </section>
           </div>
-        </div>
       </main>
       </div>
 
