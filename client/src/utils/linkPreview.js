@@ -22,6 +22,12 @@ export async function fetchLinkPreview(url) {
   const timeout = setTimeout(() => controller.abort(), 7000);
 
   try {
+    // YouTube's own oEmbed is free and CORS-enabled, so video titles don't depend on Microlink's rate limit.
+    if (getYouTubeId(safeUrl)) {
+      const response = await fetch(`https://www.youtube.com/oembed?${new URLSearchParams({ url: safeUrl, format: 'json' })}`, { signal: controller.signal });
+      const data = response.ok ? await response.json() : {};
+      if (typeof data.title === 'string') return { siteTitle: data.title.slice(0, 300), description: null, previewImageUrl: safeHttpUrl(data.thumbnail_url), faviconUrl: 'https://www.youtube.com/favicon.ico' };
+    }
     const response = await fetch(`https://api.microlink.io/?${params}`, {
       signal: controller.signal,
     });
