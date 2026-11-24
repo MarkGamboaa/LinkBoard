@@ -2,6 +2,7 @@ import 'dotenv/config';
 import { createHash, randomBytes } from 'node:crypto';
 import Fastify from 'fastify';
 import cors from '@fastify/cors';
+import rateLimit from '@fastify/rate-limit';
 import { applicationDefault, cert, getApps, initializeApp } from 'firebase-admin/app';
 import { getAuth } from 'firebase-admin/auth';
 import { PrismaPg } from '@prisma/adapter-pg';
@@ -24,13 +25,25 @@ const prisma = new PrismaClient({
   adapter: new PrismaPg({ connectionString: databaseUrl }),
 });
 
-const app = Fastify({ logger: true });
+// Render sits behind a proxy; without this every visitor shares the proxy's IP and one rate-limit bucket.
+// shortcut: trusting all hops lets a client spoof X-Forwarded-For to dodge the limit; set the exact hop count if abuse shows up.
+const app = Fastify({ logger: true, trustProxy: true });
 
 await app.register(cors, {
   origin: process.env.CORS_ORIGIN
     ? process.env.CORS_ORIGIN.split(',').map((origin) => origin.trim())
     : true,
   methods: ['GET', 'HEAD', 'POST', 'PUT', 'PATCH', 'DELETE'],
+});
+
+// Per-IP cap, well above what a person clicking around the dashboard sends.
+await app.register(rateLimit, { max: 300, timeWindow: '1 minute' });
+
+// Public boards change rarely but are the heaviest read; any write clears the copy so owners see changes at once.
+const PUBLIC_CACHE_MS = 30_000;
+let publicBoardsCache = null;
+app.addHook('onResponse', async (request) => {
+  if (request.method !== 'GET' && request.method !== 'HEAD' && request.method !== 'OPTIONS') publicBoardsCache = null;
 });
 
 app.addHook('onRequest', async (request, reply) => {
@@ -184,6 +197,14 @@ app.get('/api/boards', async (request) => {
 });
 
 app.get('/api/boards/public', async (request) => {
+  if (!publicBoardsCache || Date.now() - publicBoardsCache.at > PUBLIC_CACHE_MS) {
+    publicBoardsCache = { at: Date.now(), boards: await loadPublicBoards() };
+  }
+  // isOwner depends on the viewer, so it is added per request on top of the shared copy.
+  return publicBoardsCache.boards.map(({ ownerUid, ...board }) => ({ ...board, isOwner: request.user?.uid === ownerUid }));
+});
+
+async function loadPublicBoards() {
   const boards = await prisma.board.findMany({
     where: { isPublic: true },
     include: { links: { orderBy: { position: 'asc' } } },
@@ -199,10 +220,10 @@ app.get('/api/boards/public', async (request) => {
     _id: board.id,
     title: board.title,
     ownerNickname: ownerNicknames.get(board.ownerUid) || 'LinkBoard user',
-    isOwner: request.user?.uid === board.ownerUid,
+    ownerUid: board.ownerUid,
     links: (board.links || []).map(serializeLink),
   }));
-});
+}
 
 app.post('/api/boards/:id/copy', async (request, reply) => {
   const sourceBoard = await prisma.board.findFirst({
