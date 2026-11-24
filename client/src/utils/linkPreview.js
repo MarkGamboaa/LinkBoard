@@ -109,3 +109,9 @@ export function getFaviconUrl(url) {
     return null;
   }
 }
+
+// Set from the profile page's Display section; on by default.
+export const SHOW_DOMAINS_KEY = "linkboard:show-domains";
+export const readShowDomains = () => {
+  try { return localStorage.getItem(SHOW_DOMAINS_KEY) !== "0"; } catch { return true; }
+};

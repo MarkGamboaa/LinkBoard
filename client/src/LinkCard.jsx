@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { getDomain, getFaviconUrl, getYouTubeThumbnail } from "./utils/linkPreview";
+import { getDomain, getFaviconUrl, getYouTubeThumbnail, readShowDomains } from "./utils/linkPreview";
 import { matchBoard } from "./utils/search";
 
 const COMPACT_LIMIT = 5;
@@ -8,6 +8,7 @@ const VIEW_KEY = "linkboard:link-view";
 const readView = () => {
   try { return localStorage.getItem(VIEW_KEY) === "list" ? "list" : "grid"; } catch { return "grid"; }
 };
+
 
 export function Favicon({ link, size = 16 }) {
   const [failed, setFailed] = useState(false);
@@ -124,6 +125,7 @@ export default function LinkCard({
 }) {
   const [draggedLinkIndex, setDraggedLinkIndex] = useState(null);
   const [view, setView] = useState(readView);
+  const [showDomains] = useState(readShowDomains);
 
   const normalizedQuery = searchQuery.trim().toLowerCase();
   const isFiltering = Boolean(normalizedQuery);
@@ -180,7 +182,7 @@ export default function LinkCard({
       <a href={link.url} target="_blank" rel="noopener noreferrer" className="flex min-h-9 items-center gap-2.5 px-5 py-1.5 no-underline transition-colors hover:bg-surface">
         <Favicon link={link} />
         <span className="min-w-0 flex-1 truncate text-[15px] font-semibold text-base-content">{title(link)}</span>
-        <span className="max-w-[45%] shrink-0 truncate text-[13px] tabular-nums text-steel">{getDomain(link.url)}</span>
+        {showDomains && <span className="max-w-[45%] shrink-0 truncate text-[13px] tabular-nums text-steel">{getDomain(link.url)}</span>}
       </a>
     </li>
   );

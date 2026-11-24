@@ -3,6 +3,7 @@ import BrandLogo from "./BrandLogo";
 import { updateUserProfile, getUserProfile, uploadProfileImage, deleteProfileImage, changeUserPassword, validatePassword, deleteUserAccount } from "./firebase";
 import LoadingSpinner from "./components/LoadingSpinner.jsx";
 import Modal from "./components/Modal.jsx";
+import { readShowDomains, SHOW_DOMAINS_KEY } from "./utils/linkPreview";
 
 import { auth } from "./firebase";
 export default function ProfilePage({ user, onBack, onLogout, onUserUpdate }) {
@@ -30,6 +31,12 @@ export default function ProfilePage({ user, onBack, onLogout, onUserUpdate }) {
   const [deleteError, setDeleteError] = useState('');
   const [logoutLoading, setLogoutLoading] = useState(false);
   const fileInputRef = useRef(null);
+  const [showDomains, setShowDomains] = useState(readShowDomains);
+
+  const changeShowDomains = (next) => {
+    setShowDomains(next);
+    try { localStorage.setItem(SHOW_DOMAINS_KEY, next ? "1" : "0"); } catch { /* storage blocked: choice lasts this visit */ }
+  };
 
   const togglePasswordVisibility = (field) => {
     setVisiblePasswordFields((current) => ({ ...current, [field]: !current[field] }));
@@ -463,6 +470,18 @@ export default function ProfilePage({ user, onBack, onLogout, onUserUpdate }) {
                   </div>
                 </dl>
               </form>
+            </section>
+
+            {/* Display preferences: saved on this device only. */}
+            <section className="sheet" aria-labelledby="display-title">
+              <h2 id="display-title" className="px-6 pb-3 pt-5 text-xl font-extrabold tracking-[-0.01em]">Display</h2>
+              <label className="flex cursor-pointer items-center justify-between gap-3 border-t border-hairline px-6 py-4">
+                <span>
+                  <span className="block font-semibold text-base-content">Show website addresses</span>
+                  <span className="block text-sm text-steel">Turn off to show only each link’s icon and title on your board cards.</span>
+                </span>
+                <input type="checkbox" className="toggle toggle-primary" checked={showDomains} onChange={(event) => changeShowDomains(event.target.checked)} />
+              </label>
             </section>
 
             {/* Security */}
