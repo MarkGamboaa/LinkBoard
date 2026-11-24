@@ -2,10 +2,11 @@ import React, { useState, useEffect, useRef } from "react";
 import BrandLogo from "./BrandLogo";
 import { updateUserProfile, getUserProfile, uploadProfileImage, deleteProfileImage, changeUserPassword, validatePassword, deleteUserAccount } from "./firebase";
 import LoadingSpinner from "./components/LoadingSpinner.jsx";
+import ThemeSetting from "./components/ThemeSetting.jsx";
+import Modal from "./components/Modal.jsx";
 
 import { auth } from "./firebase";
 export default function ProfilePage({ user, onBack, onLogout, onUserUpdate }) {
-  const [menuOpen, setMenuOpen] = useState(false);
   const [editMode, setEditMode] = useState(false);
   const [firstName, setFirstName] = useState('');
   const [lastName, setLastName] = useState('');
@@ -320,11 +321,11 @@ export default function ProfilePage({ user, onBack, onLogout, onUserUpdate }) {
   };
 
   if (loading) {
-    return <LoadingSpinner fullScreen text="Loading profile..." />;
+    return <LoadingSpinner fullScreen text="Loading profile…" />;
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-[#e3efff] to-[#b3d0f7] flex flex-col">
+    <div className="min-h-screen flex flex-col">
       <div className="max-w-[1800px] mx-auto w-full">
         <header className="flex flex-row justify-between items-center p-4 sm:p-6 gap-2 sm:gap-0">
                       <h1><BrandLogo /></h1>
@@ -340,7 +341,7 @@ export default function ProfilePage({ user, onBack, onLogout, onUserUpdate }) {
               {logoutLoading ? (
                 <>
                   <span className="enhanced-button-spinner w-3 h-3"></span>
-                  Logging out...
+                  Logging out…
                 </>
               ) : (
                 <>
@@ -351,24 +352,24 @@ export default function ProfilePage({ user, onBack, onLogout, onUserUpdate }) {
           </div>
           {/* Mobile menu */}
           <div className="sm:hidden flex items-center relative">
-            <button className="btn btn-sm btn-ghost" onClick={() => setMenuOpen(v => !v)} aria-label="Open menu">
-              <svg className="w-6 h-6" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
+            <button className="btn btn-sm btn-ghost" popoverTarget="profile-menu" style={{ anchorName: '--profile-menu' }} aria-label="Menu">
+              <svg aria-hidden="true" className="w-6 h-6" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" d="M4 6h16M4 12h16M4 18h16" />
               </svg>
             </button>
-            {menuOpen && (
-              <div className="absolute right-0 top-10 w-40 bg-white rounded-lg shadow-lg z-50 flex flex-col border border-gray-200">
-                <button className="px-4 py-2 text-left hover:bg-gray-100" onClick={onBack}>
+            {/* Native popover: Esc and outside clicks close it. */}
+              <div id="profile-menu" popover="auto" className="popover-menu" style={{ positionAnchor: '--profile-menu' }}>
+                <button className="px-4 py-2 text-left hover:bg-base-200" onClick={onBack}>
                   <svg className="inline-block w-5 h-5 mr-1" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" d="M15 19l-7-7 7-7" />
                   </svg>
                   Back
                 </button>
-                <button className={`px-4 py-2 text-left hover:bg-gray-100 ${logoutLoading ? 'enhanced-button-loading' : ''}`} onClick={handleLogout} disabled={logoutLoading}>
+                <button className={`px-4 py-2 text-left hover:bg-base-200 ${logoutLoading ? 'enhanced-button-loading' : ''}`} onClick={handleLogout} disabled={logoutLoading}>
                   {logoutLoading ? (
                     <>
                       <span className="enhanced-button-spinner w-3 h-3"></span>
-                      Logging out...
+                      Logging out…
                     </>
                   ) : (
                     <>
@@ -377,12 +378,11 @@ export default function ProfilePage({ user, onBack, onLogout, onUserUpdate }) {
                   )}
                 </button>
               </div>
-            )}
           </div>
         </header>
 
         <main className="flex-1 flex flex-col items-center justify-start px-4 sm:px-6">
-          <div className="bg-white bg-opacity-60 rounded-xl sm:rounded-2xl shadow-xl w-full max-w-6xl min-h-fit flex flex-col justify-start items-center p-3 sm:p-6 lg:p-8 mt-0 overflow-y-auto">
+          <div className="flex w-full max-w-3xl flex-col items-center pt-2 sm:pt-4">
           
           {/* Profile Content */}
           <div className="w-full space-y-5 sm:space-y-7 pb-4 sm:pb-8">
@@ -395,7 +395,9 @@ export default function ProfilePage({ user, onBack, onLogout, onUserUpdate }) {
                       return localPhotoURL ? (
                         <img 
                           src={localPhotoURL} 
-                          alt="Profile" 
+                          alt="Profile"
+                          width={96}
+                          height={96}
                           className="w-20 h-20 sm:w-24 sm:h-24 rounded-full object-cover"
                         />
                       ) : (
@@ -411,7 +413,7 @@ export default function ProfilePage({ user, onBack, onLogout, onUserUpdate }) {
                 </div>
                 
                 {/* Edit overlay - appears on hover */}
-                <div className="absolute inset-0 bg-black bg-opacity-50 rounded-full opacity-0 group-hover:opacity-100 transition-opacity duration-200 flex items-center justify-center">
+                <div className="absolute inset-0 bg-black/50 rounded-full opacity-0 group-hover:opacity-100 transition-opacity duration-200 flex items-center justify-center">
                   <button
                     className="btn btn-circle btn-sm btn-primary"
                     onClick={() => fileInputRef.current?.click()}
@@ -468,7 +470,7 @@ export default function ProfilePage({ user, onBack, onLogout, onUserUpdate }) {
                     aria-label="Public nickname"
                   />
                 ) : (
-                  <h2 className="text-xl sm:text-2xl font-bold text-gray-800">
+                  <h2 className="text-xl sm:text-2xl font-bold text-base-content">
                     {userProfile?.nickname || 'Nickname not set'}
                   </h2>
                 )}
@@ -488,67 +490,74 @@ export default function ProfilePage({ user, onBack, onLogout, onUserUpdate }) {
                   onClick={editMode ? handleSaveProfile : handleEditProfile}
                   disabled={isUpdating}
                 >
-                  {editMode ? (isUpdating ? 'Saving...' : 'Save') : 'Edit'}
+                  {editMode ? (isUpdating ? 'Saving…' : 'Save') : 'Edit'}
                 </button>
               </div>
             </div>
 
             {/* Profile Information */}
             <div className="grid grid-cols-1 items-start gap-4 sm:gap-6">
-              <div className="card bg-white/80 backdrop-blur">
+              <div className="card bg-card">
                 <div className="card-body p-4 sm:p-6">
                   <h3 className="card-title col-span-full text-base sm:text-lg font-semibold">Account Information</h3>
                   <div className="grid grid-cols-1 gap-x-6 gap-y-3 sm:grid-cols-2">
                     <div className="flex min-w-0 flex-col gap-1">
-                      <label htmlFor="profile-first-name" className="font-medium text-gray-700 text-sm sm:text-base">First Name:</label>
+                      <label htmlFor="profile-first-name" className="font-medium text-charcoal text-sm sm:text-base">First Name:</label>
                       <input
                         id="profile-first-name"
                         type="text"
                         value={firstName}
                         onChange={(e) => setFirstName(e.target.value)}
                         readOnly={!editMode}
-                        className={`input input-bordered w-full text-base ${editMode ? 'bg-white' : 'bg-gray-50'}`}
+                        className={`input input-bordered w-full text-base ${editMode ? 'bg-base-100' : 'bg-base-200'}`}
                         placeholder="First Name"
                       />
                     </div>
                     <div className="flex min-w-0 flex-col gap-1">
-                      <label htmlFor="profile-last-name" className="font-medium text-gray-700 text-sm sm:text-base">Last Name:</label>
+                      <label htmlFor="profile-last-name" className="font-medium text-charcoal text-sm sm:text-base">Last Name:</label>
                       <input
                         id="profile-last-name"
                         type="text"
                         value={lastName}
                         onChange={(e) => setLastName(e.target.value)}
                         readOnly={!editMode}
-                        className={`input input-bordered w-full text-base ${editMode ? 'bg-white' : 'bg-gray-50'}`}
+                        className={`input input-bordered w-full text-base ${editMode ? 'bg-base-100' : 'bg-base-200'}`}
                         placeholder="Last Name"
                       />
                     </div>
                     <div className="flex min-w-0 flex-col gap-1">
-                      <label htmlFor="profile-email" className="font-medium text-gray-700 text-sm sm:text-base">Email:</label>
+                      <label htmlFor="profile-email" className="font-medium text-charcoal text-sm sm:text-base">Email:</label>
                       <input
                         id="profile-email"
                         type="email"
                         value={user?.email || ''}
                         readOnly
-                        className="input input-bordered w-full text-base bg-gray-50"
+                        className="input input-bordered w-full text-base bg-base-200"
                       />
                     </div>
                     <div className="flex min-w-0 flex-col gap-1">
-                      <label htmlFor="profile-account-created" className="font-medium text-gray-700 text-sm sm:text-base">Account Created:</label>
+                      <label htmlFor="profile-account-created" className="font-medium text-charcoal text-sm sm:text-base">Account Created:</label>
                       <input
                         id="profile-account-created"
                         type="text"
                         value={user?.metadata?.creationTime ? new Date(user.metadata.creationTime).toLocaleDateString() : 'Unknown'}
                         readOnly
-                        className="input input-bordered w-full text-base bg-gray-50"
+                        className="input input-bordered w-full text-base bg-base-200"
                       />
                     </div>
                   </div>
                 </div>
               </div>
 
+              <div className="card bg-card">
+                <div className="p-4 sm:p-6 space-y-3">
+                  <h3 className="card-title text-base sm:text-lg font-semibold">Appearance</h3>
+                  <ThemeSetting />
+                </div>
+              </div>
+
               {/* Account Actions */}
-              <div className="card bg-white/80 backdrop-blur">
+              <div className="card bg-card">
                 <div className="p-4 sm:p-6 space-y-3">
                   <h3 className="card-title text-base sm:text-lg font-semibold">Account Actions</h3>
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
@@ -581,9 +590,9 @@ export default function ProfilePage({ user, onBack, onLogout, onUserUpdate }) {
 
       {/* Change Password Modal */}
       {changePasswordModal && (
-        <div className="fixed inset-0 flex items-center justify-center bg-black/20 backdrop-blur-sm z-50 p-4">
-          <div className="bg-white rounded-lg p-4 sm:p-6 shadow-lg flex flex-col gap-4 w-full max-w-md">
-            <h2 className="text-lg font-bold">Change Password</h2>
+        <Modal onClose={handleCancelChangePassword} dismissible={!changingPassword} labelledBy="change-password-title">
+          <form className="flex flex-col gap-4" onSubmit={(event) => { event.preventDefault(); handleSubmitChangePassword(); }}>
+            <h1 id="change-password-title" className="text-lg font-bold">Change password</h1>
             
             {passwordError && (
               <div className="alert alert-error text-sm">
@@ -596,11 +605,13 @@ export default function ProfilePage({ user, onBack, onLogout, onUserUpdate }) {
 
             <div className="space-y-3">
               <div>
-                <label className="label">
+                <label className="label" htmlFor="current-password">
                   <span className="label-text text-sm sm:text-base">Current Password</span>
                 </label>
                 <div className="relative">
                   <input
+                    id="current-password"
+                    autoComplete="current-password" autoFocus
                     type={visiblePasswordFields.current ? 'text' : 'password'}
                     value={currentPassword}
                     onChange={(e) => { setCurrentPassword(e.target.value); setPasswordError(''); }}
@@ -610,7 +621,7 @@ export default function ProfilePage({ user, onBack, onLogout, onUserUpdate }) {
                   <button
                     type="button"
                     onClick={() => togglePasswordVisibility('current')}
-                    className="absolute right-3 top-1/2 z-10 -translate-y-1/2 rounded bg-transparent p-1 text-gray-500 hover:bg-transparent active:bg-transparent hover:text-gray-800 focus-visible:outline focus-visible:outline-2 focus-visible:outline-indigo-600"
+                    className="absolute right-3 top-1/2 z-10 -translate-y-1/2 rounded bg-transparent p-1 text-steel hover:bg-transparent active:bg-transparent hover:text-base-content focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary"
                     aria-label={visiblePasswordFields.current ? 'Hide current password' : 'Show current password'}
                     title={visiblePasswordFields.current ? 'Hide password' : 'Show password'}
                   >
@@ -630,11 +641,13 @@ export default function ProfilePage({ user, onBack, onLogout, onUserUpdate }) {
               </div>
               
               <div>
-                <label className="label">
+                <label className="label" htmlFor="new-password">
                   <span className="label-text text-sm sm:text-base">New Password</span>
                 </label>
                 <div className="relative">
                   <input
+                    id="new-password"
+                    autoComplete="new-password"
                     type={visiblePasswordFields.new ? 'text' : 'password'}
                     value={newPassword}
                     onChange={(e) => { setNewPassword(e.target.value); setPasswordError(''); }}
@@ -644,7 +657,7 @@ export default function ProfilePage({ user, onBack, onLogout, onUserUpdate }) {
                   <button
                     type="button"
                     onClick={() => togglePasswordVisibility('new')}
-                    className="absolute right-3 top-1/2 z-10 -translate-y-1/2 rounded bg-transparent p-1 text-gray-500 hover:bg-transparent active:bg-transparent hover:text-gray-800 focus-visible:outline focus-visible:outline-2 focus-visible:outline-indigo-600"
+                    className="absolute right-3 top-1/2 z-10 -translate-y-1/2 rounded bg-transparent p-1 text-steel hover:bg-transparent active:bg-transparent hover:text-base-content focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary"
                     aria-label={visiblePasswordFields.new ? 'Hide new password' : 'Show new password'}
                     title={visiblePasswordFields.new ? 'Hide password' : 'Show password'}
                   >
@@ -662,7 +675,7 @@ export default function ProfilePage({ user, onBack, onLogout, onUserUpdate }) {
                   </button>
                 </div>
                 {(newPassword.length > 0 || passwordValidationAttempted) && passwordRequirements.some(({ met }) => !met) && (
-                  <ul className="mt-1 space-y-0.5 text-xs text-red-600" aria-live="polite" aria-label="Password requirements">
+                  <ul className="mt-1 space-y-0.5 text-xs text-error" aria-live="polite" aria-label="Password requirements">
                     {passwordRequirements.filter(({ met }) => !met).map(({ label }) => (
                       <li key={label}>{label}</li>
                     ))}
@@ -671,11 +684,13 @@ export default function ProfilePage({ user, onBack, onLogout, onUserUpdate }) {
               </div>
               
               <div>
-                <label className="label">
+                <label className="label" htmlFor="confirm-password">
                   <span className="label-text text-sm sm:text-base">Confirm New Password</span>
                 </label>
                 <div className="relative">
                   <input
+                    id="confirm-password"
+                    autoComplete="new-password"
                     type={visiblePasswordFields.confirm ? 'text' : 'password'}
                     value={confirmPassword}
                     onChange={(e) => { setConfirmPassword(e.target.value); setPasswordError(''); }}
@@ -685,7 +700,7 @@ export default function ProfilePage({ user, onBack, onLogout, onUserUpdate }) {
                   <button
                     type="button"
                     onClick={() => togglePasswordVisibility('confirm')}
-                    className="absolute right-3 top-1/2 z-10 -translate-y-1/2 rounded bg-transparent p-1 text-gray-500 hover:bg-transparent active:bg-transparent hover:text-gray-800 focus-visible:outline focus-visible:outline-2 focus-visible:outline-indigo-600"
+                    className="absolute right-3 top-1/2 z-10 -translate-y-1/2 rounded bg-transparent p-1 text-steel hover:bg-transparent active:bg-transparent hover:text-base-content focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary"
                     aria-label={visiblePasswordFields.confirm ? 'Hide confirmation password' : 'Show confirmation password'}
                     title={visiblePasswordFields.confirm ? 'Hide password' : 'Show password'}
                   >
@@ -703,50 +718,48 @@ export default function ProfilePage({ user, onBack, onLogout, onUserUpdate }) {
                   </button>
                 </div>
                 {passwordsDoNotMatch && (
-                  <p className="mt-1 text-xs text-red-600" role="status" aria-live="polite">Passwords do not match.</p>
+                  <p className="mt-1 text-xs text-error" role="status" aria-live="polite">Passwords do not match.</p>
                 )}
                 {passwordsMatch && (
-                  <p className="mt-1 text-xs text-green-700" role="status" aria-live="polite">Passwords match.</p>
+                  <p className="mt-1 text-xs text-success" role="status" aria-live="polite">Passwords match.</p>
                 )}
               </div>
             </div>
 
             <div className="flex flex-col sm:flex-row gap-2 justify-end">
-              <button 
-                className="btn btn-ghost text-sm sm:text-base" 
+              <button
+                type="button"
+                className="btn btn-ghost text-sm sm:text-base"
                 onClick={handleCancelChangePassword}
                 disabled={changingPassword}
               >
                 Cancel
               </button>
               <button
+                type="submit"
                 className="btn btn-primary text-sm sm:text-base"
-                onClick={handleSubmitChangePassword}
                 disabled={changingPassword}
               >
-                {changingPassword ? 'Changing...' : 'Change Password'}
+                {changingPassword ? 'Changing…' : 'Change Password'}
               </button>
             </div>
-          </div>
-        </div>
+          </form>
+        </Modal>
       )}
 
       {/* Remove Profile Picture Modal */}
       {deleteImageModal && (
-        <div className="fixed inset-0 flex items-center justify-center bg-black/20 backdrop-blur-sm z-50 p-4">
-          <section
-            role="dialog"
-            aria-modal="true"
-            aria-labelledby="delete-profile-image-title"
-            className="bg-white rounded-lg p-4 sm:p-6 shadow-lg flex flex-col gap-4 w-full max-w-md"
-          >
-            <h2 id="delete-profile-image-title" className="text-lg font-bold text-gray-900">Remove Profile Picture</h2>
-            <p className="text-sm text-gray-600">Are you sure you want to delete your profile picture?</p>
+        <Modal alert onClose={handleCancelDeleteImage} dismissible={!uploadingImage} labelledBy="delete-profile-image-title" describedBy="delete-profile-image-description">
+          <div className="flex flex-col gap-4">
+            <h1 id="delete-profile-image-title" className="text-lg font-bold text-base-content">Remove profile picture?</h1>
+            <p id="delete-profile-image-description" className="text-sm text-slate">Your profile picture will be removed. You can upload a new one at any time.</p>
             <div className="flex flex-col sm:flex-row gap-2 justify-end">
               <button
+                type="button"
                 className="btn btn-ghost text-sm sm:text-base"
                 onClick={handleCancelDeleteImage}
                 disabled={uploadingImage}
+                autoFocus
               >
                 Cancel
               </button>
@@ -755,24 +768,24 @@ export default function ProfilePage({ user, onBack, onLogout, onUserUpdate }) {
                 onClick={handleConfirmDeleteImage}
                 disabled={uploadingImage}
               >
-                {uploadingImage ? 'Removing...' : 'Remove Picture'}
+                {uploadingImage ? 'Removing…' : 'Remove Picture'}
               </button>
             </div>
-          </section>
-        </div>
+          </div>
+        </Modal>
       )}
 
       {/* Delete Account Modal */}
       {deleteAccountModal && (
-        <div className="fixed inset-0 flex items-center justify-center bg-black/20 backdrop-blur-sm z-50 p-4">
-          <div className="bg-white rounded-lg p-4 sm:p-6 shadow-lg flex flex-col gap-4 w-full max-w-md">
-            <h2 className="text-lg font-bold text-red-600">Delete Account</h2>
+        <Modal alert onClose={handleCancelDeleteAccount} dismissible={!deletingAccount} labelledBy="delete-account-title" describedBy="delete-account-warning">
+          <form className="flex flex-col gap-4" onSubmit={(event) => { event.preventDefault(); handleConfirmDeleteAccount(); }}>
+            <h1 id="delete-account-title" className="text-lg font-bold text-error">Delete account?</h1>
             
             <div className="alert alert-warning text-sm">
               <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.964-.833-2.732 0L3.732 16.5c-.77.833.192 2.5 1.732 2.5z" />
               </svg>
-              <span>This action cannot be undone. All your data, including boards and links, will be permanently deleted.</span>
+              <span id="delete-account-warning">This action cannot be undone. All your data, including boards and links, will be permanently deleted.</span>
             </div>
 
             {deleteError && (
@@ -785,10 +798,13 @@ export default function ProfilePage({ user, onBack, onLogout, onUserUpdate }) {
             )}
 
             <div>
-              <label className="label">
+              <label className="label" htmlFor="delete-account-password">
                 <span className="label-text text-sm sm:text-base">Enter your password to confirm</span>
               </label>
               <input
+                id="delete-account-password"
+                autoComplete="current-password"
+                autoFocus
                 type="password"
                 value={deletePassword}
                 onChange={(e) => setDeletePassword(e.target.value)}
@@ -798,23 +814,24 @@ export default function ProfilePage({ user, onBack, onLogout, onUserUpdate }) {
             </div>
 
             <div className="flex flex-col sm:flex-row gap-2 justify-end">
-              <button 
-                className="btn btn-ghost text-sm sm:text-base" 
+              <button
+                type="button"
+                className="btn btn-ghost text-sm sm:text-base"
                 onClick={handleCancelDeleteAccount}
                 disabled={deletingAccount}
               >
                 Cancel
               </button>
               <button
+                type="submit"
                 className="btn btn-error text-sm sm:text-base"
-                onClick={handleConfirmDeleteAccount}
                 disabled={deletingAccount}
               >
-                {deletingAccount ? 'Deleting...' : 'Delete Account'}
+                {deletingAccount ? 'Deleting…' : 'Delete Account'}
               </button>
             </div>
-          </div>
-        </div>
+          </form>
+        </Modal>
       )}
     </div>
   );

@@ -1,15 +1,131 @@
 @import "tailwindcss";
-@plugin "daisyui";
-
-/* Custom Font Families */
-:root {
-  --font-logo: 'Sora', sans-serif;
-  --font-ui: 'Outfit', sans-serif;
+/* Built-in themes off: daisyUI reads the --color-* tokens defined on :root below. */
+@plugin "daisyui" {
+  themes: false;
 }
 
-/* Apply fonts globally */
+/* ---------- Tokens ----------
+   Structure from DESIGN.md (Notion); color identity from the LinkBoard mark:
+   indigo #4632E6, blue #3B82F6, sky #68C8F2. Neutrals are tinted toward the indigo.
+   Every text pair is contrast-checked to WCAG AA on page, card and canvas. */
+:root {
+  color-scheme: light dark;
+
+  &:has(> head > meta[name="color-scheme"][content="dark"]) { color-scheme: dark; }
+  &:has(> head > meta[name="color-scheme"][content="light"]) { color-scheme: light; }
+
+  --lb-canvas: light-dark(#ffffff, #16172b);
+  /* Page sits behind cards: boards read as objects on a desk, in both schemes. */
+  --lb-page: light-dark(#eef0fb, #0e0f1d);
+  --lb-card: light-dark(#ffffff, #1c1e35);
+  --lb-surface: light-dark(#f1f2fb, #23253f);
+  --lb-surface-soft: light-dark(#f7f8fd, #1f2139);
+  --lb-hairline: light-dark(#dfe2f3, #2c2f4d);
+  --lb-hairline-strong: light-dark(#c3c8e3, #40446a);
+  --lb-ink: light-dark(#14152b, #eef0ff);
+  --lb-charcoal: light-dark(#2b2d4a, #dcdff5);
+  --lb-slate: light-dark(#4f5272, #aeb2d4);
+  --lb-steel: light-dark(#646788, #9094b8);
+  --lb-primary: light-dark(#4632e6, #a59cff);
+  --lb-primary-pressed: light-dark(#3623c4, #bdb6ff);
+  --lb-on-primary: light-dark(#ffffff, #0e0f1d);
+  --lb-link: light-dark(#2563eb, #6cb8f5);
+  /* Deep enough to pass 4.5:1 as text on the tinted page as well as on white. */
+  --lb-success: light-dark(#177a2e, #5ec46f);
+  --lb-warning: light-dark(#b04a00, #f0883e);
+  --lb-error: light-dark(#c92a2a, #ff7b72);
+
+  /* daisyUI component tokens */
+  --color-base-100: var(--lb-canvas);
+  --color-base-200: var(--lb-surface);
+  --color-base-300: var(--lb-hairline);
+  --color-base-content: var(--lb-ink);
+  --color-primary: var(--lb-primary);
+  --color-primary-content: var(--lb-on-primary);
+  --color-secondary: var(--lb-charcoal);
+  --color-secondary-content: var(--lb-canvas);
+  --color-accent: var(--lb-link);
+  --color-accent-content: var(--lb-canvas);
+  --color-neutral: var(--lb-ink);
+  --color-neutral-content: var(--lb-canvas);
+  --color-info: var(--lb-link);
+  --color-info-content: var(--lb-canvas);
+  --color-success: var(--lb-success);
+  --color-success-content: var(--lb-canvas);
+  --color-warning: var(--lb-warning);
+  --color-warning-content: var(--lb-canvas);
+  --color-error: var(--lb-error);
+  --color-error-content: var(--lb-canvas);
+  --radius-selector: 6px;
+  --radius-field: 8px;
+  --radius-box: 12px;
+  --size-selector: 0.25rem;
+  --size-field: 0.25rem;
+  --border: 1px;
+  --depth: 0;
+  --noise: 0;
+
+  --font-logo: 'Sora', sans-serif;
+
+  accent-color: var(--lb-primary);
+  scrollbar-color: var(--lb-hairline-strong) transparent;
+}
+
+@theme inline {
+  --font-sans: ui-sans-serif, -apple-system, BlinkMacSystemFont, "Segoe UI Variable Text", "Segoe UI", Helvetica, Arial, sans-serif, "Apple Color Emoji", "Segoe UI Emoji";
+  --color-canvas: var(--lb-canvas);
+  --color-page: var(--lb-page);
+  --color-card: var(--lb-card);
+  --color-surface: var(--lb-surface);
+  --color-surface-soft: var(--lb-surface-soft);
+  --color-hairline: var(--lb-hairline);
+  --color-hairline-strong: var(--lb-hairline-strong);
+  --color-ink: var(--lb-ink);
+  --color-charcoal: var(--lb-charcoal);
+  --color-slate: var(--lb-slate);
+  --color-steel: var(--lb-steel);
+  --color-primary-pressed: var(--lb-primary-pressed);
+  --color-link: var(--lb-link);
+}
+
+/* ---------- Base and browser-drawn surfaces ---------- */
 body {
-  font-family: var(--font-ui);
+  background: var(--lb-page);
+  color: var(--lb-ink);
+  font-family: var(--font-sans);
+  -webkit-font-smoothing: antialiased;
+}
+
+::selection {
+  background: color-mix(in oklab, var(--lb-primary) 24%, transparent);
+  color: inherit;
+}
+
+p {
+  text-wrap: pretty;
+}
+
+::placeholder {
+  color: var(--lb-steel);
+  opacity: 1;
+}
+
+:focus-visible {
+  outline: 2px solid var(--lb-primary);
+  outline-offset: 2px;
+}
+
+a {
+  text-underline-offset: 0.2em;
+}
+
+/* Removes the double-tap zoom delay on controls without disabling pinch zoom. */
+a, button, input, label, select, textarea, summary {
+  touch-action: manipulation;
+}
+
+html {
+  scroll-behavior: smooth;
 }
 
 /* Use the app's password toggle instead of Edge's built-in reveal control. */
@@ -22,614 +138,171 @@ body {
 .password-input-no-native-reveal:-webkit-autofill:hover,
 .password-input-no-native-reveal:-webkit-autofill:focus,
 .password-input-no-native-reveal:-webkit-autofill:active {
-  -webkit-box-shadow: 0 0 0 1000px #fff inset;
-  -webkit-text-fill-color: #111827;
-  caret-color: #111827;
+  -webkit-box-shadow: 0 0 0 1000px var(--lb-canvas) inset;
+  -webkit-text-fill-color: var(--lb-ink);
+  caret-color: var(--lb-ink);
 }
 
-/* Logo font class */
+.card {
+  border: 1px solid var(--lb-hairline);
+}
+
+/* Keep scroll gestures inside an open modal from scrolling the page behind it. */
+dialog:modal {
+  overscroll-behavior: contain;
+}
+
+dialog::backdrop {
+  overflow: hidden;
+  overscroll-behavior: contain;
+}
+
 .font-logo {
   font-family: var(--font-logo);
 }
 
-.link-list-scroll {
-  scrollbar-width: thin;
-  scrollbar-color: #e5e7eb transparent;
-}
-
-.link-list-scroll::-webkit-scrollbar {
-  width: 6px;
-}
-
-.link-list-scroll::-webkit-scrollbar-button {
-  display: none;
-  width: 0;
-  height: 0;
-}
-
-.link-list-scroll::-webkit-scrollbar-track {
-  background: transparent;
-}
-
-.link-list-scroll::-webkit-scrollbar-thumb {
-  background: #e5e7eb;
-  border-radius: 9999px;
-}
-
-.link-list-scroll::-webkit-scrollbar-thumb:hover {
-  background: #d1d5db;
-}
-
-.my-masonry-grid {
+/* ---------- Board masonry (react-masonry-css: items go round-robin, so order reads left to right) ---------- */
+.board-grid {
   display: flex;
-  margin-left: -16px; /* gutter size offset */
+  justify-content: center;
+  gap: 16px;
   width: 100%;
-  justify-content: flex-start;
-  flex-wrap: wrap;
-  overflow-x: hidden;
-}
-.my-masonry-grid_column {
-  padding-left: 16px; /* gutter size */
-  background-clip: padding-box;
-}
-.my-masonry-grid_column > div {
-  margin-bottom: 16px;
 }
 
-.dashboard-masonry-grid {
+.board-grid-column {
   display: flex;
-  flex-wrap: nowrap;
-  justify-content: center;
-  margin-left: -16px;
-  width: calc(100% + 16px);
+  flex: 1 1 0;
+  flex-direction: column;
+  gap: 16px;
+  min-width: 0;
 }
 
-.dashboard-masonry-grid_column {
-  flex: 0 0 336px !important;
-  width: 336px !important;
-  padding-left: 16px;
-  background-clip: padding-box;
+@media (min-width: 640px) {
+  .board-grid-column {
+    max-width: 380px;
+  }
 }
 
-.dashboard-masonry-grid_column > div {
-  margin-bottom: 16px;
+/* ---------- Popover menus (Move menu, mobile header menus): plain button groups ---------- */
+.move-menu,
+.popover-menu {
+  margin: 0;
+  min-width: 11rem;
+  padding: 4px;
+  border: 1px solid var(--lb-hairline);
+  border-radius: 10px;
+  background: var(--lb-canvas);
+  color: var(--lb-ink);
+  box-shadow: 0 8px 24px -8px color-mix(in oklab, var(--lb-ink) 35%, transparent);
 }
 
-.dashboard-board-viewport-fade {
-  -webkit-mask-image: linear-gradient(to bottom, #000 0%, #000 calc(100% - 72px), transparent 100%);
-  mask-image: linear-gradient(to bottom, #000 0%, #000 calc(100% - 72px), transparent 100%);
-}
-
-.dashboard-board-top-fade {
-  -webkit-mask-image: linear-gradient(to bottom, transparent 0%, #000 72px, #000 calc(100% - 72px), transparent 100%);
-  mask-image: linear-gradient(to bottom, transparent 0%, #000 72px, #000 calc(100% - 72px), transparent 100%);
-}
-
-.public-masonry-grid {
+.move-menu button,
+.popover-menu button {
   display: flex;
-  flex-wrap: nowrap;
-  justify-content: center;
-  margin-left: -16px;
-  width: calc(100% + 16px);
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  padding: 6px 10px;
+  border-radius: 6px;
+  text-align: start;
+  font-size: 0.875rem;
 }
 
-.public-masonry-grid_column {
-  flex: 0 0 336px !important;
-  width: 336px !important;
-  padding-left: 16px;
-  background-clip: padding-box;
+.move-menu button:hover:not(:disabled),
+.popover-menu button:hover:not(:disabled),
+.move-menu button:focus-visible,
+.popover-menu button:focus-visible {
+  background: var(--lb-surface);
 }
 
-.public-masonry-grid_column > div {
-  margin-bottom: 16px;
+.move-menu button:disabled,
+.popover-menu button:disabled {
+  color: var(--lb-steel);
+  cursor: not-allowed;
 }
 
-/* Drag and Drop Styles - Mobile-like sliding animations */
-.draggable-board {
-  transition: all 0.4s cubic-bezier(0.25, 0.46, 0.45, 0.94);
-  cursor: grab;
-  user-select: none;
-  position: relative;
+/* Tethered under its trigger where anchor positioning exists; a bottom sheet elsewhere (never stranded at 0,0). */
+@supports (position-area: block-end) {
+  .move-menu,
+  .popover-menu {
+    inset: auto;
+    margin-block-start: 4px;
+    position-area: block-end span-inline-start;
+    position-try-fallbacks: flip-block, flip-inline, flip-block flip-inline;
+  }
 }
 
-.draggable-board:hover {
-  /* Removed hover effects */
+@supports not (position-area: block-end) {
+  .move-menu,
+  .popover-menu {
+    position: fixed;
+    inset: auto 0 0 0;
+    width: auto;
+    border-radius: 12px 12px 0 0;
+  }
 }
 
-.draggable-board:active {
-  cursor: grabbing;
-  transition: none;
-}
 
-.draggable-board.dragging {
-  opacity: 0.9;
-  z-index: 1000;
-  transition: none;
-  cursor: grabbing;
-  transform: scale(1.02);
-}
-
-/* Smooth sliding animation for boards */
-.draggable-board.sliding {
-  transition: all 0.4s cubic-bezier(0.25, 0.46, 0.45, 0.94);
-}
-
+/* ---------- Drag and drop (reworked in plan item 8) ---------- */
+.draggable-board,
 .draggable-link {
-  transition: all 0.4s cubic-bezier(0.25, 0.46, 0.45, 0.94);
+  transition: transform 0.3s cubic-bezier(0.16, 1, 0.3, 1), opacity 0.2s ease;
   cursor: grab;
-  user-select: none;
   position: relative;
 }
 
-.draggable-link:hover {
-  transform: translateY(-2px);
-}
-
+.draggable-board:active,
 .draggable-link:active {
   cursor: grabbing;
   transition: none;
 }
 
+.draggable-board.dragging,
 .draggable-link.dragging {
-  opacity: 0.9;
-  z-index: 1000;
+  opacity: 0.6;
+  z-index: 10;
   transition: none;
   cursor: grabbing;
-  transform: scale(1.02);
 }
 
-/* Smooth sliding animation for links */
-.draggable-link.sliding {
-  transition: all 0.4s cubic-bezier(0.25, 0.46, 0.45, 0.94);
+/* ---------- Motion ---------- */
+.card-hover {
+  transition: border-color 0.15s ease, box-shadow 0.2s ease;
 }
 
-/* Drop zone indicators */
-.drop-zone {
-  transition: all 0.2s ease;
+.card-hover:hover {
+  border-color: var(--lb-hairline-strong);
+  box-shadow: 0 4px 12px -4px color-mix(in oklab, var(--lb-ink) 14%, transparent);
 }
 
-.drop-zone.drag-over {
-  background-color: rgba(59, 130, 246, 0.1);
-  border: 2px dashed #3b82f6;
-  border-radius: 8px;
+.card-enter {
+  animation: fade-in 0.3s cubic-bezier(0.16, 1, 0.3, 1);
 }
 
-/* Drag handle styles */
-.drag-handle {
-  cursor: grab;
-  opacity: 0.6;
-  transition: opacity 0.2s ease;
+@keyframes fade-in {
+  from { opacity: 0; transform: translateY(4px); }
 }
 
-.drag-handle:hover {
-  opacity: 1;
-}
-
-.drag-handle:active {
-  cursor: grabbing;
-}
-
-/* Enhanced Loading Animations */
-@keyframes pulse-glow {
-  0%, 100% {
-    box-shadow: 0 0 5px rgba(59, 130, 246, 0.3);
-  }
-  50% {
-    box-shadow: 0 0 20px rgba(59, 130, 246, 0.6), 0 0 30px rgba(59, 130, 246, 0.4);
-  }
-}
-
-@keyframes fade-in-up {
-  0% {
-    opacity: 0;
-    transform: translateY(20px);
-  }
-  100% {
-    opacity: 1;
-    transform: translateY(0);
-  }
-}
-
-@keyframes bounce-in {
-  0% {
-    opacity: 0;
-    transform: scale(0.3);
-  }
-  50% {
-    opacity: 1;
-    transform: scale(1.05);
-  }
-  70% {
-    transform: scale(0.9);
-  }
-  100% {
-    opacity: 1;
-    transform: scale(1);
-  }
-}
-
-@keyframes shimmer {
-  0% {
-    background-position: -200px 0;
-  }
-  100% {
-    background-position: calc(200px + 100%) 0;
-  }
-}
-
-@keyframes rotate-3d {
-  0% {
-    transform: rotateY(0deg) rotateX(0deg);
-  }
-  25% {
-    transform: rotateY(90deg) rotateX(0deg);
-  }
-  50% {
-    transform: rotateY(180deg) rotateX(90deg);
-  }
-  75% {
-    transform: rotateY(270deg) rotateX(180deg);
-  }
-  100% {
-    transform: rotateY(360deg) rotateX(360deg);
-  }
-}
-
-@keyframes wave {
-  0%, 60%, 100% {
-    transform: translateY(0);
-  }
-  30% {
-    transform: translateY(-10px);
-  }
-}
-
-@keyframes ripple {
-  0% {
-    transform: scale(0);
-    opacity: 1;
-  }
-  100% {
-    transform: scale(4);
-    opacity: 0;
-  }
-}
-
-@keyframes button-pulse {
-  0%, 100% {
-    transform: scale(1);
-    opacity: 1;
-  }
-  50% {
-    transform: scale(1.1);
-    opacity: 0.8;
-  }
-}
-
-@keyframes button-shimmer {
-  0% {
-    background-position: -100% 0;
-  }
-  100% {
-    background-position: 200% 0;
-  }
-}
-
-/* Enhanced Loading Spinner Styles */
-.enhanced-spinner {
-  animation: pulse-glow 2s ease-in-out infinite;
-  border-radius: 50%;
-  background: linear-gradient(45deg, #3b82f6, #8b5cf6, #06b6d4);
-  background-size: 200% 200%;
-  animation: pulse-glow 2s ease-in-out infinite, 
-              rotate-3d 3s linear infinite;
-}
-
-.enhanced-spinner-container {
-  animation: fade-in-up 0.6s ease-out;
-}
-
-.enhanced-spinner-text {
-  animation: wave 2s ease-in-out infinite;
-  background: linear-gradient(90deg, #6b7280, #9ca3af, #6b7280);
-  background-size: 200% 100%;
-  background-clip: text;
-  -webkit-background-clip: text;
-  -webkit-text-fill-color: transparent;
-  animation: wave 2s ease-in-out infinite,
-              shimmer 2s linear infinite;
-}
-
-.enhanced-spinner-dots {
-  display: flex;
-  gap: 4px;
-  justify-content: center;
-  margin-top: 8px;
-}
-
-.enhanced-spinner-dot {
-  width: 8px;
-  height: 8px;
-  border-radius: 50%;
-  background: #3b82f6;
-  animation: bounce-in 1.4s ease-in-out infinite both;
-}
-
-.enhanced-spinner-dot:nth-child(1) {
-  animation-delay: -0.32s;
-}
-
-.enhanced-spinner-dot:nth-child(2) {
-  animation-delay: -0.16s;
-}
-
-.enhanced-spinner-dot:nth-child(3) {
-  animation-delay: 0s;
-}
-
-.enhanced-spinner-ripple {
-  position: absolute;
-  border: 2px solid #3b82f6;
-  border-radius: 50%;
-  animation: ripple 1.5s linear infinite;
-}
-
-.enhanced-spinner-ripple:nth-child(2) {
-  animation-delay: 0.5s;
-}
-
-.enhanced-spinner-ripple:nth-child(3) {
-  animation-delay: 1s;
-}
-
-/* Enhanced Button Loading Styles */
-.enhanced-button-spinner {
-  animation: button-pulse 1.5s ease-in-out infinite;
-  background: linear-gradient(90deg, #3b82f6, #8b5cf6, #06b6d4, #3b82f6);
-  background-size: 300% 100%;
-  animation: button-pulse 1.5s ease-in-out infinite,
-              button-shimmer 2s linear infinite;
-  border-radius: 50%;
+.button-press:active {
+  transform: scale(0.98);
 }
 
 .enhanced-button-loading {
   position: relative;
-  overflow: hidden;
 }
 
-.enhanced-button-loading::before {
-  content: '';
-  position: absolute;
-  top: 0;
-  left: -100%;
-  width: 100%;
-  height: 100%;
-  background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.2), transparent);
-  animation: button-shimmer 1.5s linear infinite;
+.enhanced-button-spinner {
+  display: inline-block;
+  border: 2px solid currentColor;
+  border-right-color: transparent;
+  border-radius: 50%;
+  animation: spin 0.7s linear infinite;
 }
 
-/* Full screen loading overlay animation */
-.enhanced-fullscreen {
-  animation: fade-in-up 0.8s ease-out;
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+@keyframes spin {
+  to { transform: rotate(360deg); }
 }
 
-.enhanced-fullscreen::before {
-  content: '';
-  position: absolute;
-  top: 0;
-  left: 0;
-  right: 0;
-  bottom: 0;
-  background: linear-gradient(45deg, transparent 30%, rgba(255, 255, 255, 0.1) 50%, transparent 70%);
-  animation: shimmer 3s linear infinite;
-  pointer-events: none;
-}
-
-/* Page Transition Animations */
-@keyframes slide-in-right {
-  0% {
-    opacity: 0;
-    transform: translateX(30px);
-  }
-  100% {
-    opacity: 1;
-    transform: translateX(0);
-  }
-}
-
-@keyframes slide-in-left {
-  0% {
-    opacity: 0;
-    transform: translateX(-30px);
-  }
-  100% {
-    opacity: 1;
-    transform: translateX(0);
-  }
-}
-
-@keyframes slide-in-up {
-  0% {
-    opacity: 0;
-    transform: translateY(30px);
-  }
-  100% {
-    opacity: 1;
-    transform: translateY(0);
-  }
-}
-
-@keyframes slide-in-down {
-  0% {
-    opacity: 0;
-    transform: translateY(-30px);
-  }
-  100% {
-    opacity: 1;
-    transform: translateY(0);
-  }
-}
-
-@keyframes scale-in {
-  0% {
-    opacity: 0;
-    transform: scale(0.9);
-  }
-  100% {
-    opacity: 1;
-    transform: scale(1);
-  }
-}
-
-@keyframes fade-in-scale {
-  0% {
-    opacity: 0;
-    transform: scale(0.8) translateY(20px);
-  }
-  100% {
-    opacity: 1;
-    transform: scale(1) translateY(0);
-  }
-}
-
-/* Page Transition Classes */
-.page-enter {
-  animation: slide-in-right 0.6s ease-out;
-}
-
-.page-exit {
-  animation: slide-in-left 0.6s ease-out;
-}
-
-.modal-enter {
-  animation: scale-in 0.4s ease-out;
-}
-
-.card-enter {
-  animation: fade-in-scale 0.5s ease-out;
-}
-
-/* Interactive Element Animations */
-@keyframes hover-lift {
-  0% {
-    transform: translateY(0);
-  }
-  100% {
-    transform: translateY(-2px);
-  }
-}
-
-@keyframes button-press {
-  0% {
-    transform: scale(1);
-  }
-  50% {
-    transform: scale(0.95);
-  }
-  100% {
-    transform: scale(1);
-  }
-}
-
-@keyframes success-pulse {
-  0%, 100% {
-    transform: scale(1);
-    box-shadow: 0 0 0 0 rgba(34, 197, 94, 0.7);
-  }
-  50% {
-    transform: scale(1.05);
-    box-shadow: 0 0 0 10px rgba(34, 197, 94, 0);
-  }
-}
-
-@keyframes error-shake {
-  0%, 100% {
-    transform: translateX(0);
-  }
-  25% {
-    transform: translateX(-5px);
-  }
-  75% {
-    transform: translateX(5px);
-  }
-}
-
-/* Interactive Element Classes */
-.hover-lift {
-  transition: transform 0.2s ease, box-shadow 0.2s ease;
-}
-
-.hover-lift:hover {
-  animation: hover-lift 0.2s ease forwards;
-}
-
-.button-press:active {
-  animation: button-press 0.1s ease;
-}
-
-.success-animation {
-  animation: success-pulse 0.6s ease-out;
-}
-
-.error-animation {
-  animation: error-shake 0.5s ease-in-out;
-}
-
-/* Enhanced Form Animations */
-@keyframes input-focus {
-  0% {
-    box-shadow: 0 0 0 0 rgba(59, 130, 246, 0.5);
-  }
-  100% {
-    box-shadow: 0 0 0 4px rgba(59, 130, 246, 0.2);
-  }
-}
-
-.input-enhanced:focus {
-  animation: input-focus 0.3s ease-out;
-  border-color: #3b82f6;
-}
-
-/* Loading State Enhancements */
-.loading-overlay {
-  position: relative;
-  overflow: hidden;
-}
-
-.loading-overlay::after {
-  content: '';
-  position: absolute;
-  top: 0;
-  left: -100%;
-  width: 100%;
-  height: 100%;
-  background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.4), transparent);
-  animation: shimmer 1.5s linear infinite;
-}
-
-/* Card Hover Effects */
-.card-hover {
-  transition: all 0.3s cubic-bezier(0.25, 0.46, 0.45, 0.94);
-}
-
-.card-hover:hover {
-  transform: translateY(-4px);
-}
-
-/* Smooth Scrolling */
-html {
-  scroll-behavior: smooth;
-}
-
-/* Enhanced Focus States */
-.enhanced-focus:focus {
-  outline: none;
-  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.3);
-  border-radius: 0.375rem;
-}
-
-/* Responsive Animation Adjustments */
 @media (prefers-reduced-motion: reduce) {
   *,
   *::before,
@@ -637,55 +310,12 @@ html {
     animation-duration: 0.01ms !important;
     animation-iteration-count: 1 !important;
     transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
   }
 }
 
-/* Center cards on mobile only (single column) */
 @media (max-width: 767px) {
-  .my-masonry-grid {
-    margin-left: 0;
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    gap: 16px; /* Add gap between cards */
-    padding: 0; /* Remove all padding to prevent cut-off */
-  }
-  
-  .my-masonry-grid_column {
-    padding-left: 0;
-    width: 100%;
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-  }
-  
-  .my-masonry-grid_column > div {
-    width: 320px; /* Fixed width for mobile cards */
-    max-width: 100%;
-    margin-bottom: 16px; /* Ensure proper spacing between cards */
-  }
-  
-  /* Make sure the first board title is visible */
-  .my-masonry-grid_column > div:first-child {
-    margin-top: 0; /* Remove top margin since container has padding */
-  }
-  
-  /* Ensure the container has proper padding */
-  .my-masonry-grid {
-    margin-top: 0; /* Remove top margin to the entire grid */
-  }
-  
-  /* Make account action buttons slightly bigger on mobile */
   .btn {
-    min-height: 44px; /* Slightly increase minimum height */
-    font-size: 15px; /* Slightly increase font size */
-    padding: 10px 14px; /* Slightly increase padding */
-  }
-  
-  /* Specific styling for account action buttons on mobile */
-  .card .btn {
-    min-height: 48px; /* Slightly bigger for account action buttons */
-    font-size: 16px; /* Slightly larger font for account actions */
-    padding: 12px 16px; /* Slightly more padding for account action buttons */
+    min-height: 44px;
   }
 }

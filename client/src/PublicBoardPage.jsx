@@ -1,7 +1,8 @@
-import React, { useState, useEffect, useRef } from "react";
+import React, { useState, useEffect } from "react";
 import BrandLogo from "./BrandLogo";
-import LinkCard from "./LinkCard";
 import Masonry from "react-masonry-css";
+import { masonryColumns } from "./utils/masonry";
+import LinkCard from "./LinkCard";
 import LoadingSpinner from "./components/LoadingSpinner.jsx";
 import { apiFetch, auth } from "./firebase";
 import { getApiUrl } from "./utils/api";
@@ -11,52 +12,12 @@ export default function PublicBoardPage({ onLogin, onSignup, onBackToDashboard, 
   const [loading, setLoading] = useState(true);
   const [copyingBoardId, setCopyingBoardId] = useState(null);
   const [copiedBoardIds, setCopiedBoardIds] = useState(() => new Set());
-  const boardViewportRef = useRef(null);
-  const [hasBoardOverflow, setHasBoardOverflow] = useState(false);
-  const [hasScrolledBoards, setHasScrolledBoards] = useState(false);
-
-  // Dynamically set columns based on number of boards
-  const maxCols = 4;
-  const colCount = Math.min(publicBoards.length, maxCols) || 1;
-  const breakpointColumnsObj = {
-    default: colCount,
-    1400: Math.min(publicBoards.length, 3) || 1,
-    1100: Math.min(publicBoards.length, 2) || 1,
-    768: 1
-  };
 
   // Fetch public boards
   useEffect(() => {
     fetchPublicBoards();
   }, []);
 
-  useEffect(() => {
-    const viewport = boardViewportRef.current;
-    const masonry = viewport?.querySelector('.public-masonry-grid');
-    if (!viewport || !masonry) {
-      setHasBoardOverflow(false);
-      setHasScrolledBoards(false);
-      return;
-    }
-
-    const updateOverflow = () => {
-      setHasBoardOverflow(viewport.scrollHeight > viewport.clientHeight + 1);
-      setHasScrolledBoards(viewport.scrollTop > 1);
-    };
-    const updateScroll = () => setHasScrolledBoards(viewport.scrollTop > 1);
-    updateOverflow();
-    const observer = new ResizeObserver(updateOverflow);
-    observer.observe(viewport);
-    observer.observe(masonry);
-    viewport.addEventListener('scroll', updateScroll, { passive: true });
-    window.addEventListener('resize', updateOverflow);
-
-    return () => {
-      observer.disconnect();
-      viewport.removeEventListener('scroll', updateScroll);
-      window.removeEventListener('resize', updateOverflow);
-    };
-  }, [publicBoards.length]);
 
   const fetchPublicBoards = async () => {
     try {
@@ -117,11 +78,11 @@ export default function PublicBoardPage({ onLogin, onSignup, onBackToDashboard, 
   };
 
   if (loading) {
-    return <LoadingSpinner fullScreen text="Loading public boards..." />;
+    return <LoadingSpinner fullScreen text="Loading public boards…" />;
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-[#e3efff] to-[#b3d0f7] flex flex-col">
+    <div className="min-h-screen flex flex-col">
       <div className="max-w-[1800px] mx-auto w-full">
         <header className="flex flex-row justify-between items-center p-4 sm:p-6 gap-2 sm:gap-0">
           <h1><BrandLogo /></h1>
@@ -164,11 +125,11 @@ export default function PublicBoardPage({ onLogin, onSignup, onBackToDashboard, 
         </header>
 
         <main className="flex-1 flex flex-col items-center justify-start px-2 sm:px-6">
-          <div ref={boardViewportRef} className={`w-full h-[calc(100vh-120px)] sm:h-[calc(100vh-115px)] max-h-full sm:max-h-[900px] flex flex-col justify-start items-center p-1 sm:p-8 pt-4 overflow-y-auto ${hasBoardOverflow ? 'dashboard-board-viewport-fade' : ''} ${hasScrolledBoards ? 'dashboard-board-top-fade' : ''}`}>
+          <div className="flex w-full flex-col items-center p-1 pb-12 pt-4 sm:p-8">
             {publicBoards.length === 0 ? (
-              <div className="flex flex-col items-center justify-center h-full text-center">
-                <h2 className="text-2xl font-bold text-gray-700 mb-4">No Public Boards Available</h2>
-                <p className="text-gray-600 mb-6">Be the first to share your link board with the community!</p>
+              <div className="flex flex-col items-center justify-center py-16 text-center">
+                <h2 className="text-2xl font-bold text-charcoal mb-4">No Public Boards Available</h2>
+                <p className="text-slate mb-6">Be the first to share your link board with the community!</p>
                 {!isLoggedIn && (
                   <div className="flex gap-4">
                     <button className="btn btn-primary" onClick={onSignup}>Create Your Board</button>
@@ -179,33 +140,30 @@ export default function PublicBoardPage({ onLogin, onSignup, onBackToDashboard, 
             ) : (
               <>
                 <div className="w-full mb-6 text-center">
-                  <h2 className="text-xl font-semibold text-gray-700 mb-2">
+                  <h2 className="text-xl font-semibold text-charcoal mb-2">
                     Discover Public Link Boards
                   </h2>
                 </div>
                 
                 {/* Public Boards List */}
-                <Masonry
-                  breakpointCols={breakpointColumnsObj}
-                  className="public-masonry-grid w-full mb-4"
-                  columnClassName="public-masonry-grid_column"
-                >
+                <Masonry breakpointCols={masonryColumns(publicBoards.length)} className="board-grid mb-4" columnClassName="board-grid-column">
                   {publicBoards.map((board, idx) => (
                     <div key={board._id || idx} className="draggable-board relative">
                       <LinkCard
                         category={board.title}
                         links={board.links || []}
                         isReadOnly={true}
+                        className="w-full"
                         isPublic={true}
                         ownerLabel={board.ownerNickname}
                         headerAction={board.isOwner ? (
-                          <span className="inline-flex items-center rounded-full bg-gray-100 px-3 py-1 text-xs font-medium text-gray-600">
+                          <span className="inline-flex items-center rounded-full bg-base-200 px-3 py-1 text-xs font-medium text-slate">
                             Your board
                           </span>
                         ) : (
                           <button
                             type="button"
-                            className={`inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-full border-0 p-0 text-[0px] leading-none align-middle transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-indigo-600 ${copiedBoardIds.has(board._id) ? 'bg-emerald-50 text-emerald-700' : 'bg-indigo-50 text-indigo-700 hover:bg-indigo-100'}`}
+                            className={`inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-full border-0 p-0 text-[0px] leading-none align-middle transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary ${copiedBoardIds.has(board._id) ? 'bg-success/10 text-success' : 'bg-primary/10 text-primary hover:bg-primary/15'}`}
                             onClick={() => handleUseBoard(board)}
                             disabled={copyingBoardId !== null || copiedBoardIds.has(board._id)}
                             title={copyingBoardId === board._id ? 'Copying board' : copiedBoardIds.has(board._id) ? 'Board added to your boards' : isLoggedIn ? 'Copy this board to your boards' : 'Sign in to copy this board'}

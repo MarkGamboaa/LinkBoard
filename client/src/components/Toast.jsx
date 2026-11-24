@@ -1,19 +1,19 @@
 import React, { useState, useEffect } from 'react';
 
-export default function Toast({ message, type = 'info', duration = 3000, onClose }) {
+export default function Toast({ id, message, type = 'info', duration = 3000, onClose }) {
   const [isVisible, setIsVisible] = useState(true);
 
   useEffect(() => {
     const timer = setTimeout(() => {
       setIsVisible(false);
-      setTimeout(() => onClose(), 300); // Wait for fade out animation
+      setTimeout(() => onClose(id), 300); // Wait for fade out animation
     }, duration);
 
     return () => clearTimeout(timer);
-  }, [duration, onClose]);
+  }, [duration, onClose, id]);
 
   const getToastClasses = () => {
-    const baseClasses = 'alert transition-all duration-300 ease-in-out';
+    const baseClasses = 'alert transition-[opacity,translate] duration-300 ease-out';
     
     switch (type) {
       case 'success':
@@ -59,17 +59,17 @@ export default function Toast({ message, type = 'info', duration = 3000, onClose
   if (!isVisible) return null;
 
   return (
-    <div className={`${getToastClasses()} ${isVisible ? 'opacity-100 translate-y-0' : 'opacity-0 -translate-y-2'}`}>
+    <div role={type === 'error' ? 'alert' : 'status'} className={`${getToastClasses()} ${isVisible ? 'opacity-100 translate-y-0' : 'opacity-0 -translate-y-2'}`}>
       {getIcon()}
       <span>{message}</span>
-      <button 
-        className="btn btn-sm btn-ghost" 
+      <button type="button" aria-label="Dismiss notification"
+        className="btn btn-sm btn-ghost"
         onClick={() => {
           setIsVisible(false);
-          setTimeout(() => onClose(), 300);
+          setTimeout(() => onClose(id), 300);
         }}
       >
-        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <svg aria-hidden="true" className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12" />
         </svg>
       </button>

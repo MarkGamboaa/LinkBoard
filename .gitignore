@@ -109,3 +109,6 @@ server/serviceAccountKey*.json
 
 # Generated Prisma Client
 server/generated/
+
+# Playwright MCP output
+.playwright-mcp/

@@ -1,28 +1,20 @@
 import React, { useState, useEffect, useRef } from "react";
 import BrandLogo from "./BrandLogo";
-import LinkCard from "./LinkCard";
 import Masonry from "react-masonry-css";
+import { masonryColumns } from "./utils/masonry";
+import LinkCard, { Favicon } from "./LinkCard";
 import LoadingSpinner from "./components/LoadingSpinner.jsx";
-import ProfilePage from "./ProfilePage.jsx";
+import Modal from "./components/Modal.jsx";
 import { apiFetch, getUserProfile } from "./firebase";
 import { BOARD_TEMPLATES } from "./data/boardTemplates";
-import { fetchLinkPreview } from "./utils/linkPreview";
+import { fetchLinkPreview, getDomain, normalizeUrl } from "./utils/linkPreview";
+import { matchBoard } from "./utils/search";
 
-const getTemplateLinkTextColor = (color) => {
-  const hex = String(color || '#181f29').replace('#', '');
-  if (!/^[0-9a-f]{6}$/i.test(hex)) return '#ffffff';
-  const red = parseInt(hex.slice(0, 2), 16);
-  const green = parseInt(hex.slice(2, 4), 16);
-  const blue = parseInt(hex.slice(4, 6), 16);
-  const brightness = (red * 299 + green * 587 + blue * 114) / 1000;
-  return brightness < 128 ? '#ffffff' : '#111827';
-};
+const UNDO_DELAY_MS = 6000;
 
 export default function DashboardPage({ onLogout, user: initialUser, onProfile, onPublic, pendingBoardCopyId = null, onPendingBoardCopyHandled }) {
-  const [user, setUser] = useState(initialUser);
   const [userProfile, setUserProfile] = useState(null);
   const [userProfileLoading, setUserProfileLoading] = useState(true);
-  const [menuOpen, setMenuOpen] = useState(false);
   const [boards, setBoards] = useState([]);
   const [modalOpen, setModalOpen] = useState(false);
   const [newBoardTitle, setNewBoardTitle] = useState("");
@@ -32,9 +24,11 @@ export default function DashboardPage({ onLogout, user: initialUser, onProfile, 
   const [addLinkModal, setAddLinkModal] = useState({ open: false, boardIdx: null, linkIdx: null });
   const [newLinkTitle, setNewLinkTitle] = useState("");
   const [newLinkUrl, setNewLinkUrl] = useState("");
-  const [newLinkColor, setNewLinkColor] = useState("#181f29");
   const [newLinkTags, setNewLinkTags] = useState("");
   const [newLinkNote, setNewLinkNote] = useState("");
+  // Page details looked up while the link form is open; reused on save so the page is fetched once.
+  const [linkPreview, setLinkPreview] = useState({ url: null, status: 'idle', data: {} });
+  const titleTouched = useRef(false);
   const [addLinkError, setAddLinkError] = useState("");
   const [savingLink, setSavingLink] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
@@ -49,9 +43,10 @@ export default function DashboardPage({ onLogout, user: initialUser, onProfile, 
   const [loading, setLoading] = useState(true);
   const [logoutLoading, setLogoutLoading] = useState(false);
   const [addingLinkLoading, setAddingLinkLoading] = useState(false);
-  const [deletingLinkLoading, setDeletingLinkLoading] = useState(false);
+  // Deleted links wait here for UNDO_DELAY_MS before the server delete runs, so Undo restores the same link.
+  const [pendingDeletes, setPendingDeletes] = useState([]);
+  const deleteTimers = useRef(new Map());
   const [draggedBoardIndex, setDraggedBoardIndex] = useState(null);
-  const [slidingBoards, setSlidingBoards] = useState(new Set());
   const [selectedBoardId, setSelectedBoardId] = useState(null);
   const [editingBoardTitle, setEditingBoardTitle] = useState(false);
   const [boardTitleDraft, setBoardTitleDraft] = useState('');
@@ -64,19 +59,6 @@ export default function DashboardPage({ onLogout, user: initialUser, onProfile, 
   const [leaveBoardError, setLeaveBoardError] = useState('');
   const [leavingBoard, setLeavingBoard] = useState(false);
   const handledBoardCopies = useRef(new Set());
-  const boardViewportRef = useRef(null);
-  const [hasBoardOverflow, setHasBoardOverflow] = useState(false);
-  const [hasScrolledBoards, setHasScrolledBoards] = useState(false);
-
-  // Dynamically set columns based on number of boards
-  const maxCols = 4;
-  const colCount = Math.min(boards.length, maxCols) || 1;
-  const breakpointColumnsObj = {
-    default: colCount,
-    1400: Math.min(boards.length, 3) || 1,
-    1100: Math.min(boards.length, 2) || 1,
-    768: 1
-  };
 
   // Fetch user profile and boards. A new account's profile can still be saving
   // when Firebase first routes it to the dashboard, so retry a brief 404.
@@ -158,40 +140,17 @@ export default function DashboardPage({ onLogout, user: initialUser, onProfile, 
     e.dataTransfer.dropEffect = 'move';
   };
 
-  const handleBoardDrop = async (e, dropIndex) => {
+  const handleBoardDrop = (e, dropIndex) => {
     e.preventDefault();
-    if (draggedBoardIndex === null || draggedBoardIndex === dropIndex) {
-      setDraggedBoardIndex(null);
-      return;
-    }
-
-    const newBoards = [...boards];
-    const draggedBoard = newBoards[draggedBoardIndex];
-    newBoards.splice(draggedBoardIndex, 1);
-    newBoards.splice(dropIndex, 0, draggedBoard);
-    
-    // Add sliding animation to all affected boards
-    const affectedIndices = new Set();
-    if (draggedBoardIndex < dropIndex) {
-      // Moving forward - animate boards in between
-      for (let i = draggedBoardIndex; i <= dropIndex; i++) {
-        affectedIndices.add(i);
-      }
-    } else {
-      // Moving backward - animate boards in between
-      for (let i = dropIndex; i <= draggedBoardIndex; i++) {
-        affectedIndices.add(i);
-      }
-    }
-    
-    setSlidingBoards(affectedIndices);
-    setBoards(newBoards);
+    if (draggedBoardIndex !== null && draggedBoardIndex !== dropIndex) moveBoard(draggedBoardIndex, dropIndex);
     setDraggedBoardIndex(null);
+  };
 
-    // Remove sliding animation after animation completes
-    setTimeout(() => {
-      setSlidingBoards(new Set());
-    }, 400);
+  const moveBoard = async (from, to) => {
+    const newBoards = [...boards];
+    const [moved] = newBoards.splice(from, 1);
+    newBoards.splice(to, 0, moved);
+    setBoards(newBoards);
 
     // Save only the order, and only for owned boards that moved; sending the whole board rewrote every link.
     try {
@@ -287,10 +246,11 @@ export default function DashboardPage({ onLogout, user: initialUser, onProfile, 
     setAddLinkModal({ open: true, boardIdx: idx, linkIdx: null });
     setNewLinkTitle("");
     setNewLinkUrl("");
-    setNewLinkColor("#181f29");
     setNewLinkTags("");
     setNewLinkNote("");
     setAddLinkError("");
+    setLinkPreview({ url: null, status: 'idle', data: {} });
+    titleTouched.current = false;
   };
 
   const handleEditLink = (boardIdx, linkIdx) => {
@@ -299,16 +259,53 @@ export default function DashboardPage({ onLogout, user: initialUser, onProfile, 
     setAddLinkModal({ open: true, boardIdx, linkIdx });
     setNewLinkTitle(link.title || "");
     setNewLinkUrl(link.url || "");
-    setNewLinkColor(link.color || "#181f29");
     setNewLinkTags((link.tags || []).join(', '));
     setNewLinkNote(link.note || "");
     setAddLinkError("");
+    setLinkPreview({ url: null, status: 'idle', data: {} });
+    titleTouched.current = true; // keep the title they already chose
   };
 
-  // Confirm add link
+  const editingLinkUrl = addLinkModal.linkIdx === null ? null : boards[addLinkModal.boardIdx]?.links?.[addLinkModal.linkIdx]?.url ?? null;
+
+  // Quick add: a pasted or typed URL is looked up after a short pause, and fills the title unless the user wrote one.
+  useEffect(() => {
+    if (!addLinkModal.open) return undefined;
+    const url = normalizeUrl(newLinkUrl);
+    if (!url || url === editingLinkUrl) {
+      setLinkPreview({ url: null, status: 'idle', data: {} });
+      return undefined;
+    }
+    let cancelled = false;
+    const timer = window.setTimeout(async () => {
+      setLinkPreview({ url, status: 'loading', data: {} });
+      const data = await fetchLinkPreview(url);
+      if (cancelled) return;
+      setLinkPreview({ url, status: 'done', data });
+      if (!titleTouched.current) setNewLinkTitle(data.siteTitle || getDomain(url));
+    }, 450);
+    return () => {
+      cancelled = true;
+      window.clearTimeout(timer);
+    };
+  }, [newLinkUrl, addLinkModal.open, editingLinkUrl]);
+
+  // Applies a change to one board's links without touching anything else in it.
+  const updateBoardLinks = (boardId, update) => {
+    setBoards((current) => current.map((board) => (
+      board._id === boardId ? { ...board, links: update(board.links || []) } : board
+    )));
+  };
+
+  const readError = async (response, fallback) => {
+    const result = await response.json().catch(() => ({}));
+    return result.error || fallback;
+  };
+
   const handleConfirmAddLink = async () => {
-    if (!newLinkTitle.trim() || !newLinkUrl.trim()) {
-      setAddLinkError("Enter both a link title and URL.");
+    const url = normalizeUrl(newLinkUrl);
+    if (!url) {
+      setAddLinkError("Enter a web address, like example.com.");
       return;
     }
 
@@ -316,139 +313,166 @@ export default function DashboardPage({ onLogout, user: initialUser, onProfile, 
     setAddingLinkLoading(true);
     setAddLinkError("");
     try {
-      let url = newLinkUrl.trim();
-      if (!/^https?:\/\//i.test(url)) {
-        url = 'https://' + url;
-      }
-
-      const boardToUpdate = boards[addLinkModal.boardIdx];
-      if (!boardToUpdate) throw new Error('Could not find this board. Refresh the page and try again.');
-      const links = [...(boardToUpdate.links || [])];
-      const previousLink = addLinkModal.linkIdx === null ? null : links[addLinkModal.linkIdx];
-      const preview = previousLink?.url === url ? {} : await fetchLinkPreview(url);
-      const tags = [...new Set(newLinkTags.split(',').map((tag) => tag.trim().toLowerCase()).filter(Boolean))];
-      const updatedLink = {
-        ...(previousLink || {}),
-        title: newLinkTitle.trim(),
+      const board = boards[addLinkModal.boardIdx];
+      if (!board) throw new Error('Could not find this board. Refresh the page and try again.');
+      const previousLink = addLinkModal.linkIdx === null ? null : board.links?.[addLinkModal.linkIdx];
+      const urlChanged = previousLink?.url !== url;
+      // New or changed URL: replace all preview metadata so an old site's preview never lingers.
+      const preview = !urlChanged ? {} : linkPreview.url === url && linkPreview.status === 'done' ? linkPreview.data : await fetchLinkPreview(url);
+      const fields = {
+        title: newLinkTitle.trim() || preview.siteTitle || previousLink?.title || getDomain(url),
         url,
-        color: newLinkColor,
-        tags,
+        tags: [...new Set(newLinkTags.split(',').map((tag) => tag.trim().toLowerCase()).filter(Boolean))],
         note: newLinkNote.trim(),
-        ...(preview.siteTitle ? preview : previousLink?.url === url ? {} : preview),
       };
-      if (addLinkModal.linkIdx === null) links.push(updatedLink);
-      else links[addLinkModal.linkIdx] = updatedLink;
-      
-      const response = await apiFetch(`/api/boards/${boardToUpdate._id}`, {
-        method: 'PUT',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({ links })
-      });
-
-      const result = await response.json().catch(() => ({}));
-      if (!response.ok) {
-        throw new Error(result.error || `Could not add link (HTTP ${response.status})`);
+      if (urlChanged) {
+        Object.assign(fields, {
+          siteTitle: preview.siteTitle ?? null,
+          description: preview.description ?? null,
+          previewImageUrl: preview.previewImageUrl ?? null,
+          faviconUrl: preview.faviconUrl ?? null,
+        });
       }
 
-      const savedLink = result.links?.[addLinkModal.linkIdx === null ? result.links.length - 1 : addLinkModal.linkIdx];
-      const savedTags = Array.isArray(savedLink?.tags) ? savedLink.tags : [];
-      const savedNote = typeof savedLink?.note === 'string' ? savedLink.note.trim() : '';
-      if (!savedLink || JSON.stringify(savedTags) !== JSON.stringify(tags) || savedNote !== newLinkNote.trim()) {
-        throw new Error('The API did not return the saved tags and note. Restart the server, then try saving again.');
-      }
+      const response = await apiFetch(
+        previousLink ? `/api/boards/${board._id}/links/${previousLink._id}` : `/api/boards/${board._id}/links`,
+        { method: previousLink ? 'PATCH' : 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(fields) },
+      );
+      if (!response.ok) throw new Error(await readError(response, `Could not save the link (HTTP ${response.status})`));
+      const saved = await response.json();
 
-      setBoards(currentBoards => currentBoards.map((board, i) =>
-        i === addLinkModal.boardIdx ? { ...result, ownerName: result.ownerName || board.ownerName, members: board.members } : board
-      ));
+      updateBoardLinks(board._id, (links) => (previousLink
+        ? links.map((link) => (link._id === saved._id ? saved : link))
+        : [...links, saved]));
       setAddLinkModal({ open: false, boardIdx: null, linkIdx: null });
       setNewLinkTitle("");
       setNewLinkUrl("");
       setNewLinkTags("");
       setNewLinkNote("");
     } catch (error) {
-      console.error('Error adding link:', error);
-      setAddLinkError(error.message || 'Could not add link. Check your connection and try again.');
+      console.error('Error saving link:', error);
+      setAddLinkError(error.message || 'Could not save the link. Check your connection and try again.');
     } finally {
       setSavingLink(false);
       setAddingLinkLoading(false);
     }
   };
 
-  // Delete link handler
-  const handleDeleteLink = async (boardIdx, linkIdx) => {
-    setDeletingLinkLoading(true);
-    try {
-      const boardToUpdate = boards[boardIdx];
-      const updatedLinks = boardToUpdate.links.filter((_, lIdx) => lIdx !== linkIdx);
-      
-      const response = await apiFetch(`/api/boards/${boardToUpdate._id}`, {
-        method: 'PUT',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({ links: updatedLinks })
+  const restoreLinks = (boardId, entries) => {
+    updateBoardLinks(boardId, (links) => {
+      const restored = [...links];
+      [...entries].sort((a, b) => a.index - b.index).forEach(({ link, index }) => {
+        if (!restored.some((item) => item._id === link._id)) restored.splice(Math.min(index, restored.length), 0, link);
       });
+      return restored;
+    });
+  };
 
-      if (!response.ok) throw new Error(`HTTP ${response.status}`);
-      const updatedBoard = await response.json();
-      setBoards(boards => boards.map((board, i) =>
-        i === boardIdx ? { ...updatedBoard, ownerName: updatedBoard.ownerName || board.ownerName, members: board.members } : board
-      ));
+  const commitDelete = async (entry) => {
+    deleteTimers.current.delete(entry.link._id);
+    setPendingDeletes((current) => current.filter((item) => item.link._id !== entry.link._id));
+    try {
+      const response = await apiFetch(`/api/boards/${entry.boardId}/links/${entry.link._id}`, { method: 'DELETE' });
+      if (!response.ok) throw new Error(await readError(response, `HTTP ${response.status}`));
+      updateBoardLinks(entry.boardId, (links) => links.filter((item) => item._id !== entry.link._id));
     } catch (error) {
       console.error('Error deleting link:', error);
-      window.showToast?.('Could not delete the link. Please try again.', 'error');
-    } finally {
-      setDeletingLinkLoading(false);
+      restoreLinks(entry.boardId, [entry]);
+      window.showToast?.(`Could not delete “${entry.link.title}”. It has been put back.`, 'error');
     }
   };
 
-  // Reorder links handler
-  const handleReorderLinks = async (boardIdx, newLinks) => {
-    try {
-      const boardToUpdate = boards[boardIdx];
-      
-      const response = await apiFetch(`/api/boards/${boardToUpdate._id}`, {
-        method: 'PUT',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({ links: newLinks })
-      });
+  const handleDeleteLink = (boardIdx, linkIdx) => {
+    const board = boards[boardIdx];
+    const link = board?.links?.[linkIdx];
+    if (!link || deleteTimers.current.has(link._id)) return;
+    const entry = { boardId: board._id, link, index: linkIdx };
+    updateBoardLinks(board._id, (links) => links.filter((item) => item._id !== link._id));
+    setPendingDeletes((current) => [...current, entry]);
+    deleteTimers.current.set(link._id, window.setTimeout(() => commitDelete(entry), UNDO_DELAY_MS));
+  };
 
-      if (!response.ok) throw new Error(`HTTP ${response.status}`);
-      const updatedBoard = await response.json();
-      setBoards(boards => boards.map((board, i) =>
-        i === boardIdx ? { ...updatedBoard, ownerName: updatedBoard.ownerName || board.ownerName, members: board.members } : board
-      ));
+  const undoDeletes = (boardId) => {
+    const entries = pendingDeletes.filter((entry) => entry.boardId === boardId);
+    entries.forEach(({ link }) => {
+      window.clearTimeout(deleteTimers.current.get(link._id));
+      deleteTimers.current.delete(link._id);
+    });
+    setPendingDeletes((current) => current.filter((entry) => entry.boardId !== boardId));
+    restoreLinks(boardId, entries);
+  };
+
+  // Leaving the dashboard (e.g. to Profile) finishes pending deletes now instead of dropping them.
+  // shortcut: closing the tab inside the undo window keeps the link (safe direction); add a keepalive delete if that matters.
+  const pendingRef = useRef(pendingDeletes);
+  pendingRef.current = pendingDeletes;
+  useEffect(() => () => {
+    pendingRef.current.forEach((entry) => {
+      window.clearTimeout(deleteTimers.current.get(entry.link._id));
+      apiFetch(`/api/boards/${entry.boardId}/links/${entry.link._id}`, { method: 'DELETE' }).catch(() => {});
+    });
+  }, []);
+
+  const handleReorderLinks = async (boardIdx, newLinks) => {
+    const board = boards[boardIdx];
+    if (!board) return;
+    const previousLinks = board.links || [];
+    updateBoardLinks(board._id, () => newLinks); // show the new order immediately
+    try {
+      const response = await apiFetch(`/api/boards/${board._id}/links/order`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ ids: newLinks.map((link) => link._id) }),
+      });
+      if (!response.ok) {
+        const message = await readError(response, 'Could not save the new link order. Please try again.');
+        if (response.status === 409) fetchBoards(); // a collaborator changed the board: load their version
+        else updateBoardLinks(board._id, () => previousLinks);
+        window.showToast?.(message, 'error');
+      }
     } catch (error) {
       console.error('Error reordering links:', error);
+      updateBoardLinks(board._id, () => previousLinks);
       window.showToast?.('Could not save the new link order. Please try again.', 'error');
     }
   };
 
   // Toggle public/private handler
-  const handleTogglePublic = async (boardIdx) => {
-    try {
-      const boardToUpdate = boards[boardIdx];
-      const newIsPublic = !boardToUpdate.isPublic;
-      
-      const response = await apiFetch(`/api/boards/${boardToUpdate._id}`, {
-        method: 'PUT',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({ isPublic: newIsPublic })
-      });
+  // "/" jumps to search, unless the user is typing somewhere or a dialog is open.
+  useEffect(() => {
+    const onKeyDown = (event) => {
+      if (event.key !== '/' || event.ctrlKey || event.metaKey || event.altKey || event.defaultPrevented) return;
+      if (event.target.closest?.('input, textarea, select, [contenteditable="true"]') || document.querySelector('dialog[open]')) return;
+      const search = document.getElementById('board-link-search');
+      if (!search) return;
+      event.preventDefault();
+      search.focus();
+    };
+    document.addEventListener('keydown', onKeyDown);
+    return () => document.removeEventListener('keydown', onKeyDown);
+  }, []);
 
-      if (!response.ok) throw new Error(`HTTP ${response.status}`);
-      const updatedBoard = await response.json();
-      setBoards(boards => boards.map((board, i) =>
-        i === boardIdx ? { ...updatedBoard, ownerName: updatedBoard.ownerName || board.ownerName, members: board.members } : board
-      ));
+  // Visibility flips on screen immediately; the save runs in the background and is undone only if it fails.
+  const visibilityRequests = useRef(new Map());
+  const handleTogglePublic = async (boardIdx) => {
+    const board = boards[boardIdx];
+    if (!board) return;
+    const isPublic = !board.isPublic;
+    const request = (visibilityRequests.current.get(board._id) || 0) + 1;
+    visibilityRequests.current.set(board._id, request);
+    setBoards((current) => current.map((item) => (item._id === board._id ? { ...item, isPublic } : item)));
+    try {
+      const response = await apiFetch(`/api/boards/${board._id}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ isPublic }),
+      });
+      if (!response.ok) throw new Error(await readError(response, `HTTP ${response.status}`));
     } catch (error) {
       console.error('Error toggling public/private:', error);
+      // A newer click already decided the state; only the latest request may roll back.
+      if (visibilityRequests.current.get(board._id) !== request) return;
+      setBoards((current) => current.map((item) => (item._id === board._id ? { ...item, isPublic: !isPublic } : item)));
       window.showToast?.('Could not change board visibility. Please try again.', 'error');
     }
   };
@@ -561,55 +585,23 @@ export default function DashboardPage({ onLogout, user: initialUser, onProfile, 
   };
 
   const normalizedSearch = searchQuery.trim().toLowerCase();
-  const visibleBoards = boards.map((board, index) => ({ board, index })).filter(({ board }) => {
-    if (!normalizedSearch || board.title.toLowerCase().includes(normalizedSearch)) return true;
-    return (board.links || []).some((link) => [
-      link.title,
-      link.siteTitle,
-      link.description,
-      link.url,
-      link.note,
-      ...(link.tags || []),
-    ].some((value) => String(value || '').toLowerCase().includes(normalizedSearch)));
-  });
+  const isFiltering = Boolean(normalizedSearch);
+  const visibleBoards = boards
+    .map((board, index) => ({ board, index, matches: matchBoard(board, normalizedSearch) }))
+    .filter(({ matches }) => matches !== null);
+  const matchingLinkCount = visibleBoards.reduce((total, { matches }) => total + matches.length, 0);
+  const clearFilters = () => setSearchQuery('');
 
-  useEffect(() => {
-    const viewport = boardViewportRef.current;
-    const masonry = viewport?.querySelector('.dashboard-masonry-grid');
-    if (!viewport || !masonry) {
-      setHasBoardOverflow(false);
-      return;
-    }
-
-    const updateOverflow = () => {
-      setHasBoardOverflow(viewport.scrollHeight > viewport.clientHeight + 1);
-      setHasScrolledBoards(viewport.scrollTop > 1);
-    };
-    const updateScroll = () => setHasScrolledBoards(viewport.scrollTop > 1);
-    updateOverflow();
-    updateScroll();
-    const observer = new ResizeObserver(updateOverflow);
-    observer.observe(viewport);
-    observer.observe(masonry);
-    viewport.addEventListener('scroll', updateScroll, { passive: true });
-    window.addEventListener('resize', updateOverflow);
-
-    return () => {
-      observer.disconnect();
-      viewport.removeEventListener('scroll', updateScroll);
-      window.removeEventListener('resize', updateOverflow);
-    };
-  }, [visibleBoards.length]);
   const selectedBoard = boards.find((board) => board._id === selectedBoardId) || null;
   const selectedBoardIndex = selectedBoard ? boards.findIndex((board) => board._id === selectedBoard._id) : -1;
   const selectedBoardTemplate = BOARD_TEMPLATES.find((item) => item.id === newBoardTemplateId) || BOARD_TEMPLATES[0];
 
   if (loading) {
-    return <LoadingSpinner fullScreen text="Loading your boards..." />;
+    return <LoadingSpinner fullScreen text="Loading your boards…" />;
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-[#e3efff] to-[#b3d0f7] flex flex-col">
+    <div className="min-h-screen flex flex-col">
       <div className="max-w-[1800px] mx-auto w-full">
         <header className="flex flex-row justify-between items-center p-4 sm:p-6 gap-2 sm:gap-0">
                       <h1><BrandLogo /></h1>
@@ -627,7 +619,7 @@ export default function DashboardPage({ onLogout, user: initialUser, onProfile, 
               {logoutLoading ? (
                 <>
                   <span className="enhanced-button-spinner w-3 h-3"></span>
-                  Logging out...
+                  Logging out…
                 </>
               ) : (
                 <>
@@ -638,26 +630,26 @@ export default function DashboardPage({ onLogout, user: initialUser, onProfile, 
           </div>
           {/* Mobile menu */}
           <div className="sm:hidden flex items-center relative">
-            <button className="btn btn-sm btn-ghost" onClick={() => setMenuOpen(v => !v)} aria-label="Open menu">
-              <svg className="w-6 h-6" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
+            <button className="btn btn-sm btn-ghost" popoverTarget="dashboard-menu" style={{ anchorName: '--dashboard-menu' }} aria-label="Menu">
+              <svg aria-hidden="true" className="w-6 h-6" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" d="M4 6h16M4 12h16M4 18h16" />
               </svg>
             </button>
-            {menuOpen && (
-              <div className="absolute right-0 top-10 w-40 bg-white rounded-lg shadow-lg z-50 flex flex-col border border-gray-200">
-                <button className="px-4 py-2 text-left hover:bg-gray-100 flex items-center gap-2" onClick={onPublic}>
+            {/* Native popover: Esc and outside clicks close it. */}
+              <div id="dashboard-menu" popover="auto" className="popover-menu" style={{ positionAnchor: '--dashboard-menu' }}>
+                <button className="px-4 py-2 text-left hover:bg-base-200 flex items-center gap-2" onClick={onPublic}>
                   <svg className="inline-block w-5 h-5" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><path d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6" /></svg>
                   Public Boards
                 </button>
-                <button className="px-4 py-2 text-left hover:bg-gray-100 flex items-center gap-2" onClick={onProfile}>
+                <button className="px-4 py-2 text-left hover:bg-base-200 flex items-center gap-2" onClick={onProfile}>
                   <svg className="inline-block w-5 h-5" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><path d="M5.121 17.804A13.937 13.937 0 0112 15c2.5 0 4.847.655 6.879 1.804M15 11a3 3 0 11-6 0 3 3 0 016 0z" /></svg>
                   Hi, {getUserNickname()}
                 </button>
-                <button className={`px-4 py-2 text-left hover:bg-gray-100 ${logoutLoading ? 'enhanced-button-loading' : ''}`} onClick={handleLogout} disabled={logoutLoading}>
+                <button className={`px-4 py-2 text-left hover:bg-base-200 ${logoutLoading ? 'enhanced-button-loading' : ''}`} onClick={handleLogout} disabled={logoutLoading}>
                   {logoutLoading ? (
                     <>
                       <span className="enhanced-button-spinner w-3 h-3"></span>
-                      Logging out...
+                      Logging out…
                     </>
                   ) : (
                     <>
@@ -666,25 +658,26 @@ export default function DashboardPage({ onLogout, user: initialUser, onProfile, 
                   )}
                 </button>
               </div>
-            )}
           </div>
         </header>
-        {/* Render ProfilePage if needed, else main dashboard */}
-        {user && user.showProfile ? (
-          <ProfilePage user={user} onBack={() => setUser(u => ({ ...u, showProfile: false }))} onUserUpdate={setUser} />
-        ) : (
         <main className="flex-1 flex flex-col items-center justify-start px-2 sm:px-6">
-          <div ref={boardViewportRef} className={`w-full h-[calc(100vh-100px)] sm:h-[calc(100vh-80px)] max-h-full sm:max-h-[960px] flex flex-col justify-start items-center p-1 sm:p-8 pt-4 overflow-y-auto ${hasBoardOverflow ? 'dashboard-board-viewport-fade' : ''} ${hasScrolledBoards ? 'dashboard-board-top-fade' : ''}`}>
+          <div className="flex w-full flex-col items-center p-1 pb-12 pt-4 sm:p-8">
           <div className="w-full max-w-3xl mb-5 flex items-center justify-center gap-3">
             <label className="sr-only" htmlFor="board-link-search">Search boards and links</label>
-            <input
-              id="board-link-search"
-              type="search"
-              className="input input-bordered min-w-0 flex-1 bg-white"
-              placeholder="Search boards, links, and tags..."
-              value={searchQuery}
-              onChange={(event) => setSearchQuery(event.target.value)}
-            />
+            <div className="relative min-w-0 flex-1">
+              <input
+                id="board-link-search"
+                type="search"
+                className="input input-bordered w-full bg-base-100 sm:pr-10"
+                placeholder="Search boards, links, and tags…"
+                aria-keyshortcuts="/"
+                value={searchQuery}
+                onChange={(event) => setSearchQuery(event.target.value)}
+              />
+              {!searchQuery && (
+                <kbd className="pointer-events-none absolute right-3 top-1/2 hidden -translate-y-1/2 rounded border border-hairline-strong px-1.5 text-xs text-steel sm:block" aria-hidden="true">/</kbd>
+              )}
+            </div>
             <button
               className="btn btn-primary flex shrink-0 items-center gap-2"
               onClick={() => {
@@ -697,20 +690,27 @@ export default function DashboardPage({ onLogout, user: initialUser, onProfile, 
               Add Board <span className="text-xl">+</span>
             </button>
           </div>
+          <div className={isFiltering ? 'mb-4 flex w-full max-w-3xl items-center justify-between gap-3 text-sm' : 'sr-only'}>
+            {/* Always mounted so screen readers hear the count change as the user types. */}
+            <p className="text-slate" role="status">
+              {!isFiltering ? '' : visibleBoards.length === 0
+                ? `No boards or links match “${searchQuery.trim()}”.`
+                : `${matchingLinkCount} ${matchingLinkCount === 1 ? 'link' : 'links'} in ${visibleBoards.length} ${visibleBoards.length === 1 ? 'board' : 'boards'}`}
+            </p>
+            {isFiltering && (
+              <button type="button" className="shrink-0 font-medium text-link hover:underline" onClick={clearFilters}>Clear search</button>
+            )}
+          </div>
           {/* Boards List */}
-                      <Masonry
-              breakpointCols={breakpointColumnsObj}
-              className="dashboard-masonry-grid w-full mb-4"
-              columnClassName="dashboard-masonry-grid_column"
-            >
+          <Masonry breakpointCols={masonryColumns(boards.length)} className="board-grid mb-4" columnClassName="board-grid-column">
             {visibleBoards.map(({ board, index: idx }) => (
               <div
                 key={board._id || idx}
-                draggable={!normalizedSearch && board.isOwner === true}
-                onDragStart={!normalizedSearch && board.isOwner === true ? (e) => handleBoardDragStart(e, idx) : undefined}
-                onDragOver={!normalizedSearch && board.isOwner === true ? handleBoardDragOver : undefined}
-                onDrop={!normalizedSearch && board.isOwner === true ? (e) => handleBoardDrop(e, idx) : undefined}
-                className={`draggable-board relative ${draggedBoardIndex === idx ? 'dragging' : ''} ${slidingBoards.has(idx) ? 'sliding' : ''}`}
+                draggable={!isFiltering && board.isOwner === true}
+                onDragStart={!isFiltering && board.isOwner === true ? (e) => handleBoardDragStart(e, idx) : undefined}
+                onDragOver={!isFiltering && board.isOwner === true ? handleBoardDragOver : undefined}
+                onDrop={!isFiltering && board.isOwner === true ? (e) => handleBoardDrop(e, idx) : undefined}
+                className={`draggable-board relative ${draggedBoardIndex === idx ? 'dragging' : ''}`}
               >
                 <LinkCard
                   category={board.title}
@@ -729,195 +729,205 @@ export default function DashboardPage({ onLogout, user: initialUser, onProfile, 
                   onDeleteLink={linkIdx => handleDeleteLink(idx, linkIdx)}
                   onReorderLinks={(newLinks) => handleReorderLinks(idx, newLinks)}
                   isAddingLink={addingLinkLoading && addLinkModal.boardIdx === idx}
-                  isDeletingLink={deletingLinkLoading}
                   isPublic={board.isPublic || false}
                   onTogglePublic={board.isOwner === false ? null : () => handleTogglePublic(idx)}
                   isReadOnly={false}
+                  className="w-full"
                 />
               </div>
             ))}
           </Masonry>
-          {normalizedSearch && visibleBoards.length === 0 && <p className="text-gray-600 py-8">No boards or links matched “{searchQuery}”.</p>}
 
         </div>
         {selectedBoard && (
-          <div
-            className="fixed inset-0 z-40 flex items-center justify-center bg-black/35 backdrop-blur-sm p-3 sm:p-6"
-            onClick={() => { setSelectedBoardId(null); setEditingBoardTitle(false); }}
+          <Modal
+            onClose={() => { setSelectedBoardId(null); setEditingBoardTitle(false); }}
+            labelledBy="selected-board-title"
+            className="max-w-3xl p-4 sm:p-6"
           >
-            <section
-              role="dialog"
-              aria-modal="true"
-              aria-labelledby="selected-board-title"
-              className="bg-white rounded-2xl shadow-2xl w-full max-w-3xl max-h-[90vh] overflow-y-auto p-4 sm:p-6"
-              onClick={(event) => event.stopPropagation()}
-            >
-              <div className="flex items-start justify-between gap-3 mb-4">
-                <div className="flex-1 min-w-0">
-                  {editingBoardTitle ? (
-                    <div className="flex flex-wrap gap-2">
-                      <input
-                        id="selected-board-title"
-                        className="input input-bordered flex-1 min-w-[180px]"
-                        value={boardTitleDraft}
-                        maxLength={100}
-                        onChange={(event) => setBoardTitleDraft(event.target.value)}
-                        autoFocus
-                      />
-                      <button className="btn btn-primary btn-sm" onClick={() => handleSaveBoardTitle(selectedBoard)} disabled={savingBoard}>
-                        {savingBoard ? 'Saving…' : 'Save'}
-                      </button>
-                      <button className="btn btn-ghost btn-sm" onClick={() => { setEditingBoardTitle(false); setBoardTitleDraft(selectedBoard.title); }}>Cancel</button>
-                    </div>
-                  ) : (
-                    <h2 id="selected-board-title" className="text-2xl font-bold text-blue-700 break-words">{selectedBoard.title}</h2>
-                  )}
-                  <p className="text-sm text-gray-500 mt-1">{selectedBoard.links?.length || 0} saved {(selectedBoard.links?.length || 0) === 1 ? 'link' : 'links'}</p>
-                  {!selectedBoard.isOwner && selectedBoard.ownerName && (
-                    <p className="text-sm text-gray-500 mt-1">Owned by <span className="font-medium text-gray-700">{selectedBoard.ownerName}</span></p>
-                  )}
-                </div>
-                <div className="flex items-center gap-2 shrink-0">
-                  {selectedBoard.isOwner && !editingBoardTitle && (
-                    <>
-                      <button
-                        type="button"
-                        className="btn btn-ghost btn-sm"
-                        onClick={() => {
-                          setInviteBoard(selectedBoard);
-                          setInviteLink('');
-                          setInviteError('');
-                          setInviteNotice(null);
-                        }}
-                      >Invite</button>
-                      <button
-                        type="button"
-                        className="btn btn-ghost btn-square btn-sm text-gray-700"
-                        onClick={() => { setBoardTitleDraft(selectedBoard.title); setEditingBoardTitle(true); setBoardActionError(''); }}
-                        aria-label="Edit board name"
-                        title="Edit board name"
-                      >
-                        <svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" className="w-5 h-5">
-                          <path strokeLinecap="round" strokeLinejoin="round" d="m16.862 4.487 2.65 2.65M4 20l4.2-.9L19.5 7.8a1.875 1.875 0 0 0-2.65-2.65L5.55 16.45 4 20Z" />
-                        </svg>
-                      </button>
-                      <button
-                        type="button"
-                        className="btn btn-ghost btn-square btn-sm text-red-600 hover:bg-red-50"
-                        onClick={() => { setBoardDeleteTarget(selectedBoard); setBoardDeleteError(''); }}
-                        aria-label="Delete board"
-                        title="Delete board"
-                      >
-                        <svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" className="w-5 h-5">
-                          <path strokeLinecap="round" strokeLinejoin="round" d="M4 7h16M10 11v6m4-6v6M5.5 7l.8 13h11.4l.8-13M9 7V4h6v3" />
-                        </svg>
-                      </button>
-                    </>
-                  )}
-                  {!selectedBoard.isOwner && (
+            <div className="mb-4 flex items-start justify-between gap-3">
+              <div className="min-w-0 flex-1">
+                {editingBoardTitle ? (
+                  <form
+                    className="flex flex-wrap gap-2"
+                    onSubmit={(event) => { event.preventDefault(); handleSaveBoardTitle(selectedBoard); }}
+                  >
+                    <label htmlFor="board-title-draft" className="sr-only">Board name</label>
+                    <input
+                      id="board-title-draft"
+                      className="input input-bordered min-w-[180px] flex-1"
+                      value={boardTitleDraft}
+                      maxLength={100}
+                      onChange={(event) => setBoardTitleDraft(event.target.value)}
+                      onKeyDown={(event) => {
+                        // Esc cancels the rename instead of closing the whole board.
+                        if (event.key === 'Escape') {
+                          event.preventDefault();
+                          setEditingBoardTitle(false);
+                          setBoardTitleDraft(selectedBoard.title);
+                        }
+                      }}
+                      autoFocus
+                    />
+                    <button type="submit" className="btn btn-primary btn-sm" disabled={savingBoard}>
+                      {savingBoard ? 'Saving…' : 'Save'}
+                    </button>
+                    <button type="button" className="btn btn-ghost btn-sm" onClick={() => { setEditingBoardTitle(false); setBoardTitleDraft(selectedBoard.title); }}>Cancel</button>
+                  </form>
+                ) : null}
+                <h1 id="selected-board-title" className={editingBoardTitle ? 'sr-only' : 'break-words text-2xl font-bold text-base-content'}>{selectedBoard.title}</h1>
+                <p className="mt-1 text-sm text-steel">{selectedBoard.links?.length || 0} saved {(selectedBoard.links?.length || 0) === 1 ? 'link' : 'links'}</p>
+                {!selectedBoard.isOwner && selectedBoard.ownerName && (
+                  <p className="mt-1 text-sm text-steel">Owned by <span className="font-medium text-charcoal">{selectedBoard.ownerName}</span></p>
+                )}
+              </div>
+              <div className="flex shrink-0 items-center gap-1">
+                {selectedBoard.isOwner && !editingBoardTitle && (
+                  <>
                     <button
                       type="button"
-                      className="btn btn-outline btn-sm border-red-200 text-red-700 hover:border-red-300 hover:bg-red-50"
-                      onClick={() => { setLeaveBoardTarget(selectedBoard); setLeaveBoardError(''); }}
-                      title="Leave shared board"
+                      className="btn btn-ghost btn-sm"
+                      onClick={() => {
+                        setInviteBoard(selectedBoard);
+                        setInviteLink('');
+                        setInviteError('');
+                        setInviteNotice(null);
+                      }}
+                    >Invite</button>
+                    <button
+                      type="button"
+                      className="btn btn-ghost btn-square btn-sm text-charcoal"
+                      onClick={() => { setBoardTitleDraft(selectedBoard.title); setEditingBoardTitle(true); setBoardActionError(''); }}
+                      aria-label="Rename board"
+                      title="Rename board"
                     >
-                      Leave board
+                      <svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" className="h-5 w-5">
+                        <path strokeLinecap="round" strokeLinejoin="round" d="m16.862 4.487 2.65 2.65M4 20l4.2-.9L19.5 7.8a1.875 1.875 0 0 0-2.65-2.65L5.55 16.45 4 20Z" />
+                      </svg>
                     </button>
-                  )}
-                  <button className="btn btn-circle btn-ghost btn-sm" onClick={() => setSelectedBoardId(null)} aria-label="Close board">✕</button>
-                </div>
+                    <button
+                      type="button"
+                      className="btn btn-ghost btn-square btn-sm text-error hover:bg-error/10"
+                      onClick={() => { setBoardDeleteTarget(selectedBoard); setBoardDeleteError(''); }}
+                      aria-label="Delete board"
+                      title="Delete board"
+                    >
+                      <svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" className="h-5 w-5">
+                        <path strokeLinecap="round" strokeLinejoin="round" d="M4 7h16M10 11v6m4-6v6M5.5 7l.8 13h11.4l.8-13M9 7V4h6v3" />
+                      </svg>
+                    </button>
+                  </>
+                )}
+                {!selectedBoard.isOwner && (
+                  <button
+                    type="button"
+                    className="btn btn-outline btn-sm border-error/30 text-error hover:border-error/30 hover:bg-error/10"
+                    onClick={() => { setLeaveBoardTarget(selectedBoard); setLeaveBoardError(''); }}
+                  >
+                    Leave board
+                  </button>
+                )}
+                <button type="button" className="btn btn-ghost btn-square btn-sm" onClick={() => setSelectedBoardId(null)} aria-label="Close board" title="Close">
+                  <svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" className="h-5 w-5">
+                    <path d="m6 6 12 12M18 6 6 18" />
+                  </svg>
+                </button>
               </div>
-              {boardActionError && <p className="text-sm text-red-600 mb-3" role="alert">{boardActionError}</p>}
-              <LinkCard
-                category={selectedBoard.title}
-                links={selectedBoard.links || []}
-                expanded
-                hideHeader
-                isOwner={selectedBoard.isOwner === true}
-                isReadOnly={false}
-                onAddLink={() => handleAddLink(selectedBoardIndex)}
-                onEditLink={(linkIdx) => handleEditLink(selectedBoardIndex, linkIdx)}
-                onDeleteLink={(linkIdx) => handleDeleteLink(selectedBoardIndex, linkIdx)}
-                onReorderLinks={(newLinks) => handleReorderLinks(selectedBoardIndex, newLinks)}
-                isAddingLink={addingLinkLoading && addLinkModal.boardIdx === selectedBoardIndex}
-                isDeletingLink={deletingLinkLoading}
-              />
-            </section>
-          </div>
+            </div>
+            {boardActionError && <p className="mb-3 text-sm text-error" role="alert">{boardActionError}</p>}
+            <LinkCard
+              category={selectedBoard.title}
+              links={selectedBoard.links || []}
+              expanded
+              hideHeader
+              isOwner={selectedBoard.isOwner === true}
+              isReadOnly={false}
+              onAddLink={() => handleAddLink(selectedBoardIndex)}
+              onEditLink={(linkIdx) => handleEditLink(selectedBoardIndex, linkIdx)}
+              onDeleteLink={(linkIdx) => handleDeleteLink(selectedBoardIndex, linkIdx)}
+              onReorderLinks={pendingDeletes.some((entry) => entry.boardId === selectedBoard._id) ? undefined : (newLinks) => handleReorderLinks(selectedBoardIndex, newLinks)}
+              isAddingLink={addingLinkLoading && addLinkModal.boardIdx === selectedBoardIndex}
+            />
+            {(() => {
+              const pending = pendingDeletes.filter((entry) => entry.boardId === selectedBoard._id);
+              if (!pending.length) return null;
+              return (
+                // Keyed by count so each new delete remounts it and moves focus to Undo (the deleted row's button is gone).
+                <div key={pending.length} role="status" className="sticky bottom-0 mt-4 flex items-center justify-between gap-3 rounded-lg bg-base-content px-4 py-3 text-sm text-base-100 shadow-lg">
+                  <span className="min-w-0 truncate">
+                    {pending.length === 1 ? `Deleted “${pending[0].link.title}”` : `Deleted ${pending.length} links`}
+                  </span>
+                  <button type="button" autoFocus className="shrink-0 rounded px-2 py-1 font-semibold underline-offset-2 hover:underline" onClick={() => undoDeletes(selectedBoard._id)}>
+                    Undo
+                  </button>
+                </div>
+              );
+            })()}
+          </Modal>
         )}
         {boardDeleteTarget && (
-          <div
-            className="fixed inset-0 z-[60] flex items-center justify-center bg-black/45 backdrop-blur-sm p-4"
-            onClick={() => { if (!deletingBoard) setBoardDeleteTarget(null); }}
+          <Modal
+            alert
+            onClose={() => setBoardDeleteTarget(null)}
+            dismissible={!deletingBoard}
+            labelledBy="delete-board-title"
+            describedBy="delete-board-description"
           >
-            <section
-              role="alertdialog"
-              aria-modal="true"
-              aria-labelledby="delete-board-title"
-              aria-describedby="delete-board-description"
-              className="w-full max-w-md rounded-2xl bg-white p-6 shadow-2xl"
-              onClick={(event) => event.stopPropagation()}
-            >
-              <div className="mb-4 flex items-start gap-3">
-                <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-red-50 text-red-600">
-                  <svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" className="h-5 w-5">
-                    <path strokeLinecap="round" strokeLinejoin="round" d="M12 8v4m0 4h.01M10.3 3.9 2.8 17a2 2 0 0 0 1.7 3h15a2 2 0 0 0 1.7-3l-7.5-13.1a2 2 0 0 0-3.4 0Z" />
-                  </svg>
-                </div>
-                <div>
-                  <h2 id="delete-board-title" className="text-lg font-bold text-gray-900">Delete this board?</h2>
-                  <p id="delete-board-description" className="mt-1 text-sm text-gray-600">
-                    <span className="font-semibold text-gray-800">{boardDeleteTarget.title}</span> and its {boardDeleteTarget.links?.length || 0} {(boardDeleteTarget.links?.length || 0) === 1 ? 'link' : 'links'} will be permanently deleted.
-                  </p>
-                </div>
+            <div className="mb-4 flex items-start gap-3">
+              <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-error/10 text-error">
+                <svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" className="h-5 w-5">
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M12 8v4m0 4h.01M10.3 3.9 2.8 17a2 2 0 0 0 1.7 3h15a2 2 0 0 0 1.7-3l-7.5-13.1a2 2 0 0 0-3.4 0Z" />
+                </svg>
               </div>
-              {boardDeleteError && <p className="mb-3 text-sm text-red-600" role="alert">{boardDeleteError}</p>}
-              <div className="flex justify-end gap-2">
-                <button className="btn btn-ghost" onClick={() => setBoardDeleteTarget(null)} disabled={deletingBoard}>Cancel</button>
-                <button className="btn btn-error" onClick={() => handleDeleteBoard(boardDeleteTarget)} disabled={deletingBoard}>
-                  {deletingBoard ? 'Deleting…' : 'Delete board'}
-                </button>
+              <div>
+                <h1 id="delete-board-title" className="text-lg font-bold text-base-content">Delete this board?</h1>
+                <p id="delete-board-description" className="mt-1 text-sm text-slate">
+                  <span className="font-semibold text-base-content">{boardDeleteTarget.title}</span> and its {boardDeleteTarget.links?.length || 0} {(boardDeleteTarget.links?.length || 0) === 1 ? 'link' : 'links'} will be permanently deleted.
+                </p>
               </div>
-            </section>
-          </div>
+            </div>
+            {boardDeleteError && <p className="mb-3 text-sm text-error" role="alert">{boardDeleteError}</p>}
+            <div className="flex justify-end gap-2">
+              <button type="button" className="btn btn-ghost" onClick={() => setBoardDeleteTarget(null)} disabled={deletingBoard} autoFocus>Cancel</button>
+              <button type="button" className="btn btn-error" onClick={() => handleDeleteBoard(boardDeleteTarget)} disabled={deletingBoard}>
+                {deletingBoard ? 'Deleting…' : 'Delete board'}
+              </button>
+            </div>
+          </Modal>
         )}
         {leaveBoardTarget && (
-          <div
-            className="fixed inset-0 z-[60] flex items-center justify-center bg-black/45 backdrop-blur-sm p-4"
-            onClick={() => { if (!leavingBoard) setLeaveBoardTarget(null); }}
+          <Modal
+            alert
+            onClose={() => setLeaveBoardTarget(null)}
+            dismissible={!leavingBoard}
+            labelledBy="leave-board-title"
+            describedBy="leave-board-description"
           >
-            <section
-              role="alertdialog"
-              aria-modal="true"
-              aria-labelledby="leave-board-title"
-              aria-describedby="leave-board-description"
-              className="w-full max-w-md rounded-2xl bg-white p-6 shadow-2xl"
-              onClick={(event) => event.stopPropagation()}
-            >
-              <h2 id="leave-board-title" className="text-lg font-bold text-gray-900">Leave this shared board?</h2>
-              <p id="leave-board-description" className="mt-2 text-sm text-gray-600">
-                You will lose access to <span className="font-semibold text-gray-800">{leaveBoardTarget.title}</span>. The board and its links will remain available to the owner and other collaborators.
-              </p>
-              {leaveBoardError && <p className="mt-3 text-sm text-red-600" role="alert">{leaveBoardError}</p>}
-              <div className="mt-5 flex justify-end gap-2">
-                <button className="btn btn-ghost" onClick={() => setLeaveBoardTarget(null)} disabled={leavingBoard}>Cancel</button>
-                <button className="btn btn-error" onClick={() => handleLeaveBoard(leaveBoardTarget)} disabled={leavingBoard}>
-                  {leavingBoard ? 'Leaving...' : 'Leave board'}
-                </button>
-              </div>
-            </section>
-          </div>
+            <h1 id="leave-board-title" className="text-lg font-bold text-base-content">Leave this shared board?</h1>
+            <p id="leave-board-description" className="mt-2 text-sm text-slate">
+              You will lose access to <span className="font-semibold text-base-content">{leaveBoardTarget.title}</span>. The board and its links will remain available to the owner and other collaborators.
+            </p>
+            {leaveBoardError && <p className="mt-3 text-sm text-error" role="alert">{leaveBoardError}</p>}
+            <div className="mt-5 flex justify-end gap-2">
+              <button type="button" className="btn btn-ghost" onClick={() => setLeaveBoardTarget(null)} disabled={leavingBoard} autoFocus>Cancel</button>
+              <button type="button" className="btn btn-error" onClick={() => handleLeaveBoard(leaveBoardTarget)} disabled={leavingBoard}>
+                {leavingBoard ? 'Leaving…' : 'Leave board'}
+              </button>
+            </div>
+          </Modal>
         )}
-        {/* Modal for new board */}
         {modalOpen && (
-          <div className="fixed inset-0 flex items-center justify-center bg-black/20 backdrop-blur-sm z-50 p-4">
-            <div className="bg-white rounded-lg p-6 shadow-lg flex flex-col gap-4 w-full max-w-md max-h-[90vh] overflow-y-auto">
-              <h2 className="text-lg font-bold">Create New Board</h2>
+          <Modal onClose={() => setModalOpen(false)} dismissible={!creatingBoard} labelledBy="create-board-title">
+            <form
+              className="flex flex-col gap-4"
+              onSubmit={(event) => { event.preventDefault(); handleAddBoard(); }}
+            >
+              <h1 id="create-board-title" className="text-lg font-bold">Create a board</h1>
               <div>
                 <label htmlFor="board-template" className="text-sm font-medium">Start from a template</label>
                 <select
                   id="board-template"
-                  className="select select-bordered w-full mt-1"
+                  className="select select-bordered mt-1 w-full"
                   value={newBoardTemplateId}
                   onChange={(event) => {
                     const template = BOARD_TEMPLATES.find((item) => item.id === event.target.value) || BOARD_TEMPLATES[0];
@@ -928,204 +938,205 @@ export default function DashboardPage({ onLogout, user: initialUser, onProfile, 
                 >
                   {BOARD_TEMPLATES.map((template) => <option key={template.id} value={template.id}>{template.title}</option>)}
                 </select>
-                <p className="text-xs text-gray-500 mt-1">{selectedBoardTemplate.description}</p>
+                <p className="mt-1 text-xs text-steel">{selectedBoardTemplate.description}</p>
               </div>
-              <div className="rounded-xl border border-gray-200 bg-gray-50 p-3" aria-label={`${selectedBoardTemplate.title} template preview`}>
-                <p className="mb-2 text-[11px] font-semibold uppercase tracking-wide text-gray-500">Preview</p>
-                <div className="rounded-lg bg-white p-3 shadow-sm">
-                  <h3 className="mb-2 truncate text-sm font-bold text-blue-700">
-                    {newBoardTitle.trim() || (newBoardTemplateId === 'blank' ? 'Your board' : selectedBoardTemplate.title)}
-                  </h3>
-                  {selectedBoardTemplate.links.length ? (
-                    <div className="flex flex-col gap-2">
-                      {selectedBoardTemplate.links.map((link) => (
-                        <div
-                          key={link.url}
-                          className="min-w-0 rounded-md px-2.5 py-2"
-                          style={{ background: link.color || '#181f29', color: getTemplateLinkTextColor(link.color) }}
-                        >
-                          <p className="truncate text-xs font-semibold">{link.title}</p>
-                          <p className="truncate text-[10px] opacity-90">{link.url}</p>
-                        </div>
-                      ))}
-                    </div>
-                  ) : (
-                    <p className="rounded-md border border-dashed border-gray-300 px-3 py-4 text-center text-xs text-gray-400">Your links will appear here</p>
-                  )}
-                </div>
+              <div className="flex justify-center rounded-xl bg-base-200 p-3" aria-label={`${selectedBoardTemplate.title} template preview`}>
+                <LinkCard
+                  category={newBoardTitle.trim() || (newBoardTemplateId === 'blank' ? 'Your board' : selectedBoardTemplate.title)}
+                  links={selectedBoardTemplate.links}
+                  isReadOnly
+                />
               </div>
-              <input
-                className="input input-bordered bg-white/60 backdrop-blur placeholder:text-gray-500 w-full"
-                placeholder="Board Title"
-                value={newBoardTitle}
-                maxLength={100}
-                onChange={e => {
-                  setNewBoardTitle(e.target.value);
-                  setCreateBoardError("");
-                }}
-                autoFocus
-              />
-              {createBoardError && (
-                <p className="text-sm text-red-600" role="alert">{createBoardError}</p>
-              )}
-              <div className="flex gap-2 justify-end">
-                <button className="btn btn-ghost" onClick={() => setModalOpen(false)} disabled={creatingBoard}>Cancel</button>
-                <button
-                  className="btn btn-primary"
-                  onClick={handleAddBoard}
-                  disabled={creatingBoard || !newBoardTitle.trim()}
-                >
-                  {creatingBoard ? 'Creating...' : 'Create'}
+              <div>
+                <label htmlFor="new-board-title" className="text-sm font-medium">Board name</label>
+                <input
+                  id="new-board-title"
+                  className="input input-bordered mt-1 w-full"
+                  placeholder="e.g. Weekend reading"
+                  value={newBoardTitle}
+                  maxLength={100}
+                  required
+                  onChange={(event) => {
+                    setNewBoardTitle(event.target.value);
+                    setCreateBoardError('');
+                  }}
+                  autoFocus
+                />
+              </div>
+              {createBoardError && <p className="text-sm text-error" role="alert">{createBoardError}</p>}
+              <div className="flex justify-end gap-2">
+                <button type="button" className="btn btn-ghost" onClick={() => setModalOpen(false)} disabled={creatingBoard}>Cancel</button>
+                <button type="submit" className="btn btn-primary" disabled={creatingBoard || !newBoardTitle.trim()}>
+                  {creatingBoard ? 'Creating…' : 'Create board'}
                 </button>
               </div>
-            </div>
-          </div>
+            </form>
+          </Modal>
         )}
-        {/* Modal for adding a link */}
         {addLinkModal.open && (
-          <div className="fixed inset-0 flex items-center justify-center bg-black/20 backdrop-blur-sm z-50 p-4">
-            <div className="bg-white rounded-lg p-6 shadow-lg flex flex-col gap-4 w-full max-w-lg">
-              <h2 className="text-lg font-bold">{addLinkModal.linkIdx === null ? 'Add Link' : 'Edit Link'}</h2>
-              <input
-                className="input input-bordered bg-white/60 backdrop-blur placeholder:text-gray-500 w-full"
-                placeholder="Link Title"
-                value={newLinkTitle}
-                onChange={e => {
-                  setNewLinkTitle(e.target.value);
-                  setAddLinkError("");
-                }}
-                autoFocus
-              />
-              <label className="flex w-full flex-col gap-1 text-sm font-medium">
-                <span className="flex w-full items-baseline justify-between gap-2">
-                  <span>Tags</span>
-                  <span className="text-right font-normal text-gray-500">(optional, separated by commas)</span>
-                </span>
+          <Modal
+            onClose={() => setAddLinkModal({ open: false, boardIdx: null, linkIdx: null })}
+            dismissible={!savingLink}
+            labelledBy="link-form-title"
+            className="max-w-lg"
+          >
+            <form
+              className="flex flex-col gap-4"
+              onSubmit={(event) => { event.preventDefault(); handleConfirmAddLink(); }}
+            >
+              <h1 id="link-form-title" className="text-lg font-bold">{addLinkModal.linkIdx === null ? 'Add a link' : 'Edit link'}</h1>
+              <div>
+                <label htmlFor="link-url" className="text-sm font-medium">URL</label>
                 <input
-                  className="input input-bordered bg-white/60 backdrop-blur placeholder:text-gray-500 font-normal w-full"
-                  placeholder="e.g. learning, frontend"
-                  value={newLinkTags}
-                  onChange={e => {
-                    setNewLinkTags(e.target.value);
-                    setAddLinkError("");
+                  id="link-url"
+                  className="input input-bordered mt-1 w-full"
+                  placeholder="Paste a link, like example.com"
+                  inputMode="url"
+                  autoComplete="url"
+                  spellCheck={false}
+                  value={newLinkUrl}
+                  required
+                  aria-describedby="link-url-status"
+                  onChange={(event) => {
+                    setNewLinkUrl(event.target.value);
+                    setAddLinkError('');
+                  }}
+                  autoFocus
+                />
+                {/* Reserved height keeps the form from jumping while details load. */}
+                <p id="link-url-status" className="mt-1.5 flex min-h-5 items-center gap-2 text-sm text-steel" aria-live="polite">
+                  {linkPreview.status === 'loading' && (
+                    <>
+                      <span className="enhanced-button-spinner h-3 w-3" aria-hidden="true" />
+                      Looking up the page…
+                    </>
+                  )}
+                  {linkPreview.status === 'done' && (linkPreview.data.siteTitle ? (
+                    <>
+                      <Favicon link={{ url: linkPreview.url, faviconUrl: linkPreview.data.faviconUrl }} />
+                      <span className="truncate">Found “{linkPreview.data.siteTitle}”</span>
+                    </>
+                  ) : 'No page details found. You can still save the link.')}
+                </p>
+              </div>
+              <div>
+                <label htmlFor="link-title" className="flex items-baseline justify-between gap-2 text-sm font-medium">
+                  <span>Title</span>
+                  <span className="font-normal text-steel">Optional, filled in from the page</span>
+                </label>
+                <input
+                  id="link-title"
+                  className="input input-bordered mt-1 w-full"
+                  value={newLinkTitle}
+                  onChange={(event) => {
+                    titleTouched.current = true;
+                    setNewLinkTitle(event.target.value);
+                    setAddLinkError('');
                   }}
                 />
-              </label>
-              <label className="flex w-full flex-col gap-1 text-sm font-medium">
-                <span className="flex w-full items-baseline justify-between gap-2">
-                  <span>Description or note</span>
-                  <span className="text-right font-normal text-gray-500">(optional)</span>
-                </span>
+              </div>
+              <div>
+                <label htmlFor="link-tags" className="flex items-baseline justify-between gap-2 text-sm font-medium">
+                  <span>Tags</span>
+                  <span className="font-normal text-steel">Optional, separated by commas</span>
+                </label>
+                <input
+                  id="link-tags"
+                  className="input input-bordered mt-1 w-full"
+                  placeholder="e.g. learning, frontend"
+                  value={newLinkTags}
+                  onChange={(event) => {
+                    setNewLinkTags(event.target.value);
+                    setAddLinkError('');
+                  }}
+                />
+              </div>
+              <div>
+                <label htmlFor="link-note" className="flex items-baseline justify-between gap-2 text-sm font-medium">
+                  <span>Note</span>
+                  <span className="font-normal text-steel">Optional</span>
+                </label>
                 <textarea
-                  className="textarea textarea-bordered bg-white/60 backdrop-blur placeholder:text-gray-500 font-normal w-full"
+                  id="link-note"
+                  className="textarea textarea-bordered mt-1 w-full"
                   placeholder="Why are you saving this link?"
                   value={newLinkNote}
-                  onChange={e => {
-                    setNewLinkNote(e.target.value);
-                    setAddLinkError("");
+                  onChange={(event) => {
+                    setNewLinkNote(event.target.value);
+                    setAddLinkError('');
                   }}
                   rows={2}
                 />
-              </label>
-              <input
-                className="input input-bordered bg-white/60 backdrop-blur placeholder:text-gray-500 w-full"
-                placeholder="URL (www.example.com)"
-                value={newLinkUrl}
-                onChange={e => {
-                  setNewLinkUrl(e.target.value);
-                  setAddLinkError("");
-                }}
-              />
-              <div className="flex flex-col gap-2">
-                <label className="font-medium text-sm">Pick Link Color:</label>
-                <input
-                  type="color"
-                  value={newLinkColor}
-                  onChange={e => setNewLinkColor(e.target.value)}
-                  className="w-12 h-8 p-0 border-none bg-transparent cursor-pointer"
-                  style={{ background: 'none' }}
-                />
               </div>
-              {addLinkError && (
-                <p className="text-sm text-red-600" role="alert">{addLinkError}</p>
-              )}
-              <div className="flex gap-2 justify-end">
-                <button className="btn btn-ghost" onClick={() => setAddLinkModal({ open: false, boardIdx: null, linkIdx: null })} disabled={savingLink}>Cancel</button>
-                <button
-                  className="btn btn-primary"
-                  onClick={handleConfirmAddLink}
-                  disabled={savingLink || !newLinkTitle.trim() || !newLinkUrl.trim()}
-                >
-                  {savingLink ? 'Saving...' : addLinkModal.linkIdx === null ? 'Add' : 'Save'}
+              {addLinkError && <p className="text-sm text-error" role="alert">{addLinkError}</p>}
+              <div className="flex justify-end gap-2">
+                <button type="button" className="btn btn-ghost" onClick={() => setAddLinkModal({ open: false, boardIdx: null, linkIdx: null })} disabled={savingLink}>Cancel</button>
+                <button type="submit" className="btn btn-primary" disabled={savingLink || !newLinkUrl.trim()}>
+                  {savingLink ? 'Saving…' : addLinkModal.linkIdx === null ? 'Add link' : 'Save'}
                 </button>
               </div>
-            </div>
-          </div>
+            </form>
+          </Modal>
         )}
         {inviteBoard && (
-          <div className="fixed inset-0 flex items-center justify-center bg-black/20 backdrop-blur-sm z-50">
-            <div className="bg-white rounded-lg p-6 shadow-lg flex flex-col gap-4 w-full max-w-md mx-4 relative">
-              <button
-                type="button"
-                className="btn btn-ghost btn-sm btn-circle absolute right-3 top-3"
-                onClick={() => setInviteBoard(null)}
-                aria-label="Close share dialog"
-                title="Close"
-              >
-                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true">
-                  <path d="m6 6 12 12M18 6 6 18" />
-                </svg>
-              </button>
-              <h2 className="text-lg font-bold">Share “{inviteBoard.title}”</h2>
-              
-              <p className="text-sm text-gray-600">Anyone with this link can join within 7 days. After joining, they keep access until they leave or you remove them.</p>
+          <Modal onClose={() => setInviteBoard(null)} labelledBy="share-board-title">
+            <div className="flex flex-col gap-4">
+              <div className="flex items-start justify-between gap-3">
+                <h1 id="share-board-title" className="min-w-0 break-words text-lg font-bold">Share “{inviteBoard.title}”</h1>
+                <button type="button" className="btn btn-ghost btn-square btn-sm -mr-2 -mt-1" onClick={() => setInviteBoard(null)} aria-label="Close share dialog" title="Close">
+                  <svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" className="h-5 w-5">
+                    <path d="m6 6 12 12M18 6 6 18" />
+                  </svg>
+                </button>
+              </div>
+              <p className="text-sm text-slate">Anyone with this link can join within 7 days. After joining, they keep access until they leave or you remove them.</p>
               {inviteLink && (
-                <div className="flex flex-col gap-2">
-                  <div className="relative">
-                    <input
-                      id="invite-link"
-                      aria-label="Invitation link"
-                      className="input input-bordered h-10 w-full pr-12 text-xs"
-                      readOnly
-                      value={inviteLink}
-                      onFocus={(event) => event.target.select()}
-                    />
-                    <button
-                      type="button"
-                      className="absolute right-1 top-1/2 z-10 flex h-8 w-8 -translate-y-1/2 items-center justify-center rounded-lg text-gray-700 transition-colors hover:bg-gray-100 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-indigo-600"
-                      onClick={handleCopyInviteLink}
-                      aria-label="Copy invite link"
-                      title="Copy invite link"
-                    >
-                      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" aria-hidden="true">
-                        <rect x="8" y="8" width="12" height="12" rx="2" />
-                        <path d="M16 8V6a2 2 0 0 0-2-2H6a2 2 0 0 0-2 2v8a2 2 0 0 0 2 2h2" />
-                      </svg>
-                    </button>
-                  </div>
+                <div className="relative">
+                  <input
+                    id="invite-link"
+                    aria-label="Invitation link"
+                    className="input input-bordered h-10 w-full pr-12 text-xs"
+                    readOnly
+                    value={inviteLink}
+                    onFocus={(event) => event.target.select()}
+                  />
+                  <button
+                    type="button"
+                    className="absolute right-1 top-1/2 z-10 flex h-8 w-8 -translate-y-1/2 items-center justify-center rounded-lg text-charcoal transition-colors hover:bg-base-200"
+                    onClick={handleCopyInviteLink}
+                    aria-label="Copy invite link"
+                    title="Copy invite link"
+                  >
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" aria-hidden="true">
+                      <rect x="8" y="8" width="12" height="12" rx="2" />
+                      <path d="M16 8V6a2 2 0 0 0-2-2H6a2 2 0 0 0-2 2v8a2 2 0 0 0 2 2h2" />
+                    </svg>
+                  </button>
                 </div>
               )}
               {inviteNotice && (
-                <p className={`rounded-lg px-3 py-2 text-sm ${inviteNotice.success ? 'bg-green-50 text-green-800' : 'bg-amber-50 text-amber-900'}`} role="status">
+                <p className={`rounded-lg px-3 py-2 text-sm ${inviteNotice.success ? 'bg-success/10 text-success' : 'bg-warning/10 text-warning'}`} role="status">
                   {inviteNotice.message}
                 </p>
               )}
               {inviteBoard.members?.length > 0 && (
                 <div>
-                  <h3 className="text-sm font-semibold mb-2">Collaborators</h3>
+                  <h2 className="mb-2 text-sm font-semibold">Collaborators</h2>
                   <ul className="flex flex-col gap-2">
                     {inviteBoard.members.map((member) => (
                       <li key={member.userUid} className="flex items-center justify-between gap-3 text-sm">
                         <div className="min-w-0">
-                          <span className="block truncate font-medium text-gray-900">{member.nickname || 'Collaborator'}</span>
-                          <span className="block truncate text-xs text-gray-500">{member.email}</span>
+                          <span className="block truncate font-medium text-base-content">{member.nickname || 'Collaborator'}</span>
+                          <span className="block truncate text-xs text-steel">{member.email}</span>
                         </div>
                         <button
-                          className="shrink-0 text-red-600 hover:underline"
+                          type="button"
+                          className="shrink-0 text-error hover:underline"
                           onClick={() => {
                             setMemberRemovalTarget({ board: inviteBoard, member });
                             setMemberRemovalError('');
                           }}
+                          aria-label={`Remove ${member.nickname || member.email}`}
                         >
                           Remove
                         </button>
@@ -1134,45 +1145,38 @@ export default function DashboardPage({ onLogout, user: initialUser, onProfile, 
                   </ul>
                 </div>
               )}
-              {inviteError && <p className="text-sm text-red-600" role="alert">{inviteError}</p>}
-              <button className="btn btn-primary mt-auto w-full" onClick={handleCreateInvite} disabled={creatingInvite}>
-                {creatingInvite ? 'Creating...' : 'Create invite link'}
+              {inviteError && <p className="text-sm text-error" role="alert">{inviteError}</p>}
+              <button type="button" className="btn btn-primary w-full" onClick={handleCreateInvite} disabled={creatingInvite}>
+                {creatingInvite ? 'Creating…' : 'Create invite link'}
               </button>
             </div>
-          </div>
+          </Modal>
         )}
         {memberRemovalTarget && (
-          <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/35 backdrop-blur-sm p-4">
-            <section
-              role="alertdialog"
-              aria-modal="true"
-              aria-labelledby="remove-collaborator-title"
-              className="w-full max-w-md rounded-2xl bg-white p-6 shadow-2xl"
-            >
-              <h2 id="remove-collaborator-title" className="text-lg font-bold text-gray-900">Remove collaborator?</h2>
-              <p className="mt-2 text-sm text-gray-600">
-                {memberRemovalTarget.member.nickname || 'This collaborator'} will lose access to “{memberRemovalTarget.board.title}”.
-              </p>
-              <p className="mt-1 text-sm text-gray-500">{memberRemovalTarget.member.email}</p>
-              {memberRemovalError && <p className="mt-3 text-sm text-red-600" role="alert">{memberRemovalError}</p>}
-              <div className="mt-6 flex justify-end gap-3">
-                <button
-                  type="button"
-                  className="btn btn-ghost"
-                  onClick={() => setMemberRemovalTarget(null)}
-                  disabled={removingMember}
-                >
-                  Cancel
-                </button>
-                <button type="button" className="btn btn-error" onClick={handleRemoveMember} disabled={removingMember}>
-                  {removingMember ? 'Removing...' : 'Remove collaborator'}
-                </button>
-              </div>
-            </section>
-          </div>
+          <Modal
+            alert
+            onClose={() => setMemberRemovalTarget(null)}
+            dismissible={!removingMember}
+            labelledBy="remove-collaborator-title"
+            describedBy="remove-collaborator-description"
+          >
+            <h1 id="remove-collaborator-title" className="text-lg font-bold text-base-content">Remove collaborator?</h1>
+            <p id="remove-collaborator-description" className="mt-2 text-sm text-slate">
+              {memberRemovalTarget.member.nickname || 'This collaborator'} will lose access to “{memberRemovalTarget.board.title}”.
+            </p>
+            <p className="mt-1 text-sm text-steel">{memberRemovalTarget.member.email}</p>
+            {memberRemovalError && <p className="mt-3 text-sm text-error" role="alert">{memberRemovalError}</p>}
+            <div className="mt-6 flex justify-end gap-3">
+              <button type="button" className="btn btn-ghost" onClick={() => setMemberRemovalTarget(null)} disabled={removingMember} autoFocus>
+                Cancel
+              </button>
+              <button type="button" className="btn btn-error" onClick={handleRemoveMember} disabled={removingMember}>
+                {removingMember ? 'Removing…' : 'Remove collaborator'}
+              </button>
+            </div>
+          </Modal>
         )}
       </main>
-      )}
       </div>
     </div>
   );

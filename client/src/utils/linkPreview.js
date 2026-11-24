@@ -42,6 +42,27 @@ export async function fetchLinkPreview(url) {
   }
 }
 
+// Turns what people type ("github.com", "https://x.dev/a") into the same http(s) URL string the API stores.
+// Returns null for anything that is not a web address with a dotted host.
+export function normalizeUrl(input) {
+  const raw = String(input || '').trim();
+  if (!raw) return null;
+  try {
+    const url = new URL(/^https?:\/\//i.test(raw) ? raw : `https://${raw}`);
+    return ['http:', 'https:'].includes(url.protocol) && url.hostname.includes('.') ? url.toString() : null;
+  } catch {
+    return null;
+  }
+}
+
+export function getDomain(url) {
+  try {
+    return new URL(url).hostname.replace(/^www\./, '');
+  } catch {
+    return '';
+  }
+}
+
 export function getFaviconUrl(url) {
   try {
     const hostname = new URL(url).hostname;

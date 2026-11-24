@@ -105,7 +105,7 @@ function App() {
   }, [inviteToken]);
 
   if (loading) {
-    return <LoadingSpinner fullScreen text="Initializing..." />;
+    return <LoadingSpinner fullScreen text="Loading…" />;
   }
 
   const handleLogout = async () => {
@@ -213,7 +213,7 @@ export default App;
 
 createRoot(document.getElementById('root')).render(
   <StrictMode>
-    <Suspense fallback={<LoadingSpinner fullScreen text="Loading..." />}>
+    <Suspense fallback={<LoadingSpinner fullScreen text="Loading…" />}>
       <App />
     </Suspense>
   </StrictMode>,

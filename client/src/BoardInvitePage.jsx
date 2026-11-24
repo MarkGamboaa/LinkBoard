@@ -43,16 +43,16 @@ export default function BoardInvitePage({ token, user, onLogin, onSignup, onSwit
   };
 
   return (
-    <main className="min-h-screen flex items-center justify-center bg-gradient-to-br from-[#e3efff] to-[#b3d0f7] p-4">
-      <section className="bg-white rounded-2xl shadow-xl p-8 w-full max-w-lg flex flex-col gap-4">
+    <main className="min-h-screen flex items-center justify-center p-4">
+      <section className="bg-card border border-hairline rounded-2xl shadow-xl p-8 w-full max-w-lg flex flex-col gap-4">
         <h1><BrandLogo textClassName="text-2xl" /></h1>
         {loading ? <p>Loading invite…</p> : invite ? (
           <>
             <h2 className="text-xl font-semibold">You’re invited to collaborate</h2>
-            <p className="text-gray-700"><strong>{invite.ownerName}</strong> invited you to join <strong>{invite.boardTitle}</strong> and collaborate on its links.</p>
+            <p className="text-charcoal"><strong>{invite.ownerName}</strong> invited you to join <strong>{invite.boardTitle}</strong> and collaborate on its links.</p>
             {user ? (
               <>
-                <p className="text-sm text-gray-600">Signed in as <strong>{user.email || 'an account without an email'}</strong>. You can join this board.</p>
+                <p className="text-sm text-slate">Signed in as <strong>{user.email || 'an account without an email'}</strong>. You can join this board.</p>
                 <button className="btn btn-primary self-start" onClick={acceptInvite} disabled={accepting}>
                   {accepting ? 'Joining…' : 'Join board'}
                 </button>
@@ -60,7 +60,7 @@ export default function BoardInvitePage({ token, user, onLogin, onSignup, onSwit
               </>
             ) : (
               <>
-                <p className="text-sm text-gray-600">Sign in or create an account to join this board.</p>
+                <p className="text-sm text-slate">Sign in or create an account to join this board.</p>
                 <div className="flex gap-3">
                   <button className="btn btn-primary" onClick={onLogin}>Sign in</button>
                   <button className="btn btn-ghost" onClick={onSignup}>Create account</button>
@@ -68,8 +68,8 @@ export default function BoardInvitePage({ token, user, onLogin, onSignup, onSwit
               </>
             )}
           </>
-        ) : <p className="text-red-600">{error || 'This invite is unavailable.'}</p>}
-        {error && invite && <p className="text-sm text-red-600" role="alert">{error}</p>}
+        ) : <p className="text-error">{error || 'This invite is unavailable.'}</p>}
+        {error && invite && <p className="text-sm text-error" role="alert">{error}</p>}
       </section>
     </main>
   );

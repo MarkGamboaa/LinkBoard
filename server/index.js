@@ -93,23 +93,46 @@ function linksError(links) {
   return null;
 }
 
+const optionalText = (value, max) => (typeof value === 'string' ? value.trim().slice(0, max) || null : null);
+
+const LINK_FIELDS = {
+  title: (link) => String(link?.title || '').trim().slice(0, 300),
+  url: (link) => safeMetadataUrl(link?.url) || '',
+  tags: (link) => (Array.isArray(link?.tags)
+    ? [...new Set(link.tags.map((tag) => String(tag).trim().toLowerCase()).filter(Boolean))].slice(0, 20)
+    : []),
+  note: (link) => optionalText(link?.note, 2000),
+  siteTitle: (link) => optionalText(link?.siteTitle, 300),
+  description: (link) => optionalText(link?.description, 1000),
+  previewImageUrl: (link) => safeMetadataUrl(link?.previewImageUrl),
+  faviconUrl: (link) => safeMetadataUrl(link?.faviconUrl),
+};
+
+// partial: only fields present in the input are returned (PATCH). Per-link colors are retired and never saved.
+function linkFields(link, { partial = false } = {}) {
+  const data = {};
+  for (const [key, normalize] of Object.entries(LINK_FIELDS)) {
+    if (!partial || Object.hasOwn(link ?? {}, key)) data[key] = normalize(link);
+  }
+  return data;
+}
+
 function normalizeLinks(links) {
   if (!Array.isArray(links)) return null;
-  return links.map((link, position) => ({
-    title: String(link?.title || '').trim().slice(0, 300),
-    url: safeMetadataUrl(link?.url) || '',
-    color: typeof link?.color === 'string' ? link.color : null,
-    position,
-    tags: Array.isArray(link?.tags)
-      ? [...new Set(link.tags.map((tag) => String(tag).trim().toLowerCase()).filter(Boolean))].slice(0, 20)
-      : [],
-    note: typeof link?.note === 'string' && link.note.trim() ? link.note.trim().slice(0, 2000) : null,
-    siteTitle: typeof link?.siteTitle === 'string' ? link.siteTitle.trim().slice(0, 300) || null : null,
-    description: typeof link?.description === 'string' ? link.description.trim().slice(0, 1000) || null : null,
-    previewImageUrl: safeMetadataUrl(link?.previewImageUrl),
-    faviconUrl: safeMetadataUrl(link?.faviconUrl),
-  }));
+  return links.map((link, position) => ({ ...linkFields(link), position }));
 }
+
+// Owners and invited collaborators can edit a board's links.
+async function findEditableBoard(boardId, userUid) {
+  const board = await prisma.board.findUnique({
+    where: { id: boardId },
+    select: { id: true, ownerUid: true, members: { where: { userUid }, select: { userUid: true } } },
+  });
+  if (!board || (board.ownerUid !== userUid && board.members.length === 0)) return null;
+  return board;
+}
+
+const isPlainObject = (value) => value !== null && typeof value === 'object' && !Array.isArray(value);
 
 app.get('/', async () => ({ message: 'LinkBoard API is running', status: 'healthy' }));
 
@@ -284,6 +307,66 @@ app.put('/api/boards/:id', async (request, reply) => {
     });
   });
   return serializeBoard(updated, request.user.uid);
+});
+
+app.post('/api/boards/:id/links', async (request, reply) => {
+  if (!isPlainObject(request.body)) return reply.code(400).send({ error: 'Send the link as a JSON object' });
+  const board = await findEditableBoard(request.params.id, request.user.uid);
+  if (!board) return reply.code(404).send({ error: 'Board not found' });
+
+  const data = linkFields(request.body);
+  if (!data.title || !data.url) return reply.code(400).send({ error: 'Each link needs a title and an http(s) URL' });
+
+  const link = await prisma.$transaction(async (tx) => {
+    const { _count, _max } = await tx.link.aggregate({ where: { boardId: board.id }, _count: true, _max: { position: true } });
+    if (_count >= MAX_LINKS_PER_BOARD) return null;
+    return tx.link.create({ data: { ...data, boardId: board.id, position: (_max.position ?? -1) + 1 } });
+  });
+  if (!link) return reply.code(400).send({ error: `A board can have at most ${MAX_LINKS_PER_BOARD} links` });
+  return reply.code(201).send(serializeLink(link));
+});
+
+app.patch('/api/boards/:id/links/:linkId', async (request, reply) => {
+  if (!isPlainObject(request.body)) return reply.code(400).send({ error: 'Send the changes as a JSON object' });
+  const board = await findEditableBoard(request.params.id, request.user.uid);
+  if (!board) return reply.code(404).send({ error: 'Board not found' });
+
+  const data = linkFields(request.body, { partial: true });
+  if (('title' in data && !data.title) || ('url' in data && !data.url)) {
+    return reply.code(400).send({ error: 'Each link needs a title and an http(s) URL' });
+  }
+  // updateMany scopes the write to this board, so a link id from another board is a 404, not an edit.
+  const result = await prisma.link.updateMany({ where: { id: request.params.linkId, boardId: board.id }, data });
+  if (!result.count) return reply.code(404).send({ error: 'This link no longer exists. Refresh to see the latest board.' });
+  return serializeLink(await prisma.link.findUnique({ where: { id: request.params.linkId } }));
+});
+
+app.delete('/api/boards/:id/links/:linkId', async (request, reply) => {
+  const board = await findEditableBoard(request.params.id, request.user.uid);
+  if (!board) return reply.code(404).send({ error: 'Board not found' });
+  // Deleting a link someone else already removed is not an error for the user.
+  await prisma.link.deleteMany({ where: { id: request.params.linkId, boardId: board.id } });
+  return { success: true };
+});
+
+app.put('/api/boards/:id/links/order', async (request, reply) => {
+  const ids = request.body?.ids;
+  if (!Array.isArray(ids) || ids.some((id) => typeof id !== 'string')) {
+    return reply.code(400).send({ error: 'Send the new order as { ids: [...] }' });
+  }
+  const board = await findEditableBoard(request.params.id, request.user.uid);
+  if (!board) return reply.code(404).send({ error: 'Board not found' });
+
+  const saved = await prisma.$transaction(async (tx) => {
+    const current = await tx.link.findMany({ where: { boardId: board.id }, select: { id: true } });
+    const currentIds = new Set(current.map((link) => link.id));
+    // A collaborator added or removed a link since this list was loaded: refuse rather than guess.
+    if (ids.length !== currentIds.size || new Set(ids).size !== ids.length || ids.some((id) => !currentIds.has(id))) return false;
+    await Promise.all(ids.map((id, position) => tx.link.update({ where: { id }, data: { position } })));
+    return true;
+  });
+  if (!saved) return reply.code(409).send({ error: 'This board changed while you were reordering. Refresh and try again.' });
+  return { success: true };
 });
 
 app.delete('/api/boards/:id', async (request, reply) => {
