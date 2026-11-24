@@ -85,50 +85,29 @@ export default function PublicBoardPage({ onLogin, onSignup, onBackToDashboard, 
     <div className="min-h-screen flex flex-col">
       <div className="max-w-[1800px] mx-auto w-full">
         <header className="cover-band flex items-center justify-between gap-2 px-4 py-3 sm:px-10 sm:py-4">
-          <h1><BrandLogo /></h1>
-          {/* Desktop menu */}
-          <div className="hidden sm:flex gap-4 items-center">
-            {isLoggedIn ? (
-              <button className="btn btn-sm btn-ghost" onClick={onBackToDashboard}>
-                <svg className="inline-block w-5 h-5 mr-1" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><path d="M10 19l-7-7m0 0l7-7m-7 7h18" /></svg>
-                Back to Dashboard
-              </button>
-            ) : (
+          <BrandLogo />
+          <nav className="flex items-center gap-1 sm:gap-2" aria-label="Account">
+            {!isLoggedIn && (
               <>
-                <button className="btn btn-sm btn-ghost" onClick={onLogin}>
-                  Login
-                </button>
-                <button className="btn btn-sm border-0 bg-white text-primary shadow-none hover:bg-white/90" onClick={onSignup}>
-                  Sign Up
-                </button>
+                <button type="button" className="btn btn-sm btn-ghost" onClick={onLogin}>Log in</button>
+                <button type="button" className="btn btn-sm border-0 bg-white font-bold text-primary shadow-none hover:bg-white/90" onClick={onSignup}>Sign up</button>
               </>
             )}
-          </div>
-          {/* Mobile menu */}
-          <div className="sm:hidden flex items-center gap-2">
-            {isLoggedIn ? (
-              <button className="btn btn-sm btn-ghost" onClick={onBackToDashboard}>
-                <svg className="inline-block w-5 h-5 mr-1" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><path d="M10 19l-7-7m0 0l7-7m-7 7h18" /></svg>
-                Back
-              </button>
-            ) : (
-              <>
-                <button className="btn btn-sm btn-ghost" onClick={onLogin}>
-                  Login
-                </button>
-                <button className="btn btn-sm border-0 bg-white text-primary shadow-none hover:bg-white/90" onClick={onSignup}>
-                  Sign Up
-                </button>
-              </>
-            )}
-          </div>
+          </nav>
         </header>
 
+        {/* Back sits under the logo, aligned with it; it returns to the dashboard when signed in, otherwise to the landing page. */}
+        <div className="px-4 pt-4 sm:px-10">
+          <button type="button" className="btn btn-sm -ml-3 border-0 bg-transparent font-semibold text-primary shadow-none hover:bg-surface" onClick={onBackToDashboard}>
+            <svg aria-hidden="true" className="h-5 w-5" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M10 19l-7-7m0 0l7-7m-7 7h18" /></svg>
+            {isLoggedIn ? 'Back to dashboard' : 'Back'}
+          </button>
+        </div>
         <main className="flex-1 flex flex-col items-center justify-start px-2 sm:px-6">
           <div className="flex w-full flex-col items-center p-1 pb-12 pt-4 sm:p-8">
             {publicBoards.length === 0 ? (
               <div className="flex flex-col items-center justify-center py-16 text-center">
-                <h2 className="text-2xl font-bold text-charcoal mb-4">No Public Boards Available</h2>
+                <h1 className="text-2xl font-bold text-charcoal mb-4">No Public Boards Available</h1>
                 <p className="text-slate mb-6">Be the first to share your link board with the community!</p>
                 {!isLoggedIn && (
                   <div className="flex gap-4">
@@ -140,9 +119,9 @@ export default function PublicBoardPage({ onLogin, onSignup, onBackToDashboard, 
             ) : (
               <>
                 <div className="w-full mb-6 text-center">
-                  <h2 className="text-xl font-semibold text-charcoal mb-2">
+                  <h1 className="text-xl font-semibold text-charcoal mb-2">
                     Discover Public Link Boards
-                  </h2>
+                  </h1>
                 </div>
                 
                 {/* Public Boards List */}

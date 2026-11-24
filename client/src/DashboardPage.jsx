@@ -757,6 +757,7 @@ export default function DashboardPage({ onLogout, user: initialUser, onProfile, 
                   onTogglePublic={board.isOwner === false ? null : () => handleTogglePublic(idx)}
                   isReadOnly={false}
                   className="w-full"
+                  sharedWith={board.members?.length || 0}
                 />
               </div>
             ))}

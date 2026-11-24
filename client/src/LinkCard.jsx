@@ -120,6 +120,7 @@ export default function LinkCard({
   isReadOnly = false,
   userEmail = null,
   className = "w-80 max-w-full",
+  sharedWith = 0,
 }) {
   const [draggedLinkIndex, setDraggedLinkIndex] = useState(null);
   const [view, setView] = useState(readView);
@@ -285,6 +286,16 @@ export default function LinkCard({
             {(ownerLabel || userEmail) && <p className="mt-0.5 text-xs text-steel">by {ownerLabel || userEmail}</p>}
           </div>
           <div className="flex shrink-0 items-center gap-2 pt-1">
+            {sharedWith > 0 && (
+              // Collaborators on this board: a people icon and count, so shared boards stand out at a glance.
+              <span className="inline-flex min-h-7 items-center gap-1 rounded-full border-[1.5px] border-primary px-2 text-xs font-bold text-primary" title={`Shared with ${sharedWith} ${sharedWith === 1 ? "person" : "people"}`}>
+                <svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="h-3.5 w-3.5">
+                  <path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2M9 11a4 4 0 1 0 0-8 4 4 0 0 0 0 8M22 21v-2a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75" />
+                </svg>
+                <span aria-hidden="true">{sharedWith}</span>
+                <span className="sr-only">Shared with {sharedWith} {sharedWith === 1 ? "person" : "people"}</span>
+              </span>
+            )}
             {headerAction}
             {!isReadOnly && isOwner && onTogglePublic && (
               <button
