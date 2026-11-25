@@ -21,6 +21,12 @@ export async function fetchLinkPreview(url) {
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), 7000);
 
+  const embed = getVideoEmbed(safeUrl);
+  if (embed) {
+    clearTimeout(timeout);
+    return { siteTitle: embed.title, description: null, previewImageUrl: null, faviconUrl: embed.faviconUrl };
+  }
+
   try {
     // YouTube's own oEmbed is free and CORS-enabled, so video titles don't depend on Microlink's rate limit.
     if (getYouTubeId(safeUrl)) {
@@ -72,6 +78,57 @@ export function getYouTubeId(url) {
       id = searchParams.get('v') || pathname.match(/^\/(?:shorts|embed|live|v)\/([^/?#]+)/)?.[1] || null;
     }
     return id && /^[\w-]{11}$/.test(id) ? id : null;
+  } catch {
+    return null;
+  }
+}
+
+// TikTok, Instagram and Facebook give no title or cover without a lookup service or a Meta app token,
+// so the title comes from the URL and the card shows the site's official embed player as the thumbnail.
+// shortcut: vm.tiktok.com and instagram share short links carry no id, so they get the generic preview.
+export function getVideoEmbed(url) {
+  try {
+    const { hostname, pathname, searchParams } = new URL(url);
+    const isHost = (domain) => hostname === domain || hostname.endsWith(`.${domain}`);
+
+    if (isHost('tiktok.com')) {
+      const match = pathname.match(/^\/@([\w.-]+)\/video\/(\d+)/);
+      if (!match) return null;
+      return {
+        site: 'tiktok',
+        title: `@${match[1]} on TikTok`,
+        src: `https://www.tiktok.com/player/v1/${match[2]}?controls=0&play_button=0&progress_bar=0&volume_control=0&fullscreen_button=0&timestamp=0&music_info=0&description=0&rel=0&native_context_menu=0&closed_caption=0`,
+        faviconUrl: 'https://www.tiktok.com/favicon.ico',
+      };
+    }
+
+    if (isHost('instagram.com')) {
+      // Also matches the newer /username/reel/CODE form.
+      const match = pathname.match(/^\/(?:[\w.]+\/)?(reels?|p|tv)\/([\w-]+)/);
+      if (!match) return null;
+      const kind = match[1] === 'p' ? 'p' : 'reel';
+      return {
+        site: 'instagram',
+        title: kind === 'p' ? 'Instagram post' : 'Instagram reel',
+        src: `https://www.instagram.com/${kind}/${match[2]}/embed/`,
+        faviconUrl: 'https://www.instagram.com/favicon.ico',
+      };
+    }
+
+    if (isHost('facebook.com') || isHost('fb.watch')) {
+      const isVideo = isHost('fb.watch')
+        || /^\/(reel|watch|share\/[rv])\b/.test(pathname)
+        || /\/videos\//.test(pathname)
+        || (pathname.startsWith('/watch') && searchParams.has('v'));
+      if (!isVideo) return null;
+      return {
+        site: 'facebook',
+        title: pathname.startsWith('/reel') || pathname.startsWith('/share/r') ? 'Facebook reel' : 'Facebook video',
+        src: `https://www.facebook.com/plugins/video.php?${new URLSearchParams({ href: url, show_text: 'false' })}`,
+        faviconUrl: 'https://www.facebook.com/favicon.ico',
+      };
+    }
+    return null;
   } catch {
     return null;
   }

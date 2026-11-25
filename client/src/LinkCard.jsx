@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { getDomain, getFaviconUrl, getOwnFaviconUrl, getYouTubeThumbnail, readShowDomains } from "./utils/linkPreview";
+import { getDomain, getFaviconUrl, getOwnFaviconUrl, getVideoEmbed, getYouTubeThumbnail, readShowDomains } from "./utils/linkPreview";
 import { matchBoard } from "./utils/search";
 
 const COMPACT_LIMIT = 5;
@@ -32,6 +32,22 @@ export function Favicon({ link, size = 16 }) {
 
 function PreviewImage({ link }) {
   const [failed, setFailed] = useState(false);
+  const embed = getVideoEmbed(link.url);
+  if (embed) {
+    // Clicks pass through to the card's link, so the player reads as a still cover.
+    return (
+      <iframe
+        src={embed.src}
+        title={embed.title}
+        loading="lazy"
+        tabIndex={-1}
+        aria-hidden="true"
+        scrolling="no"
+        // Instagram's embed starts with a ~56px profile header; shift it out of view so the photo shows.
+        className={`pointer-events-none w-full border-0 ${embed.site === "instagram" ? "-mt-14 h-[calc(100%+3.5rem)]" : "h-full"}`}
+      />
+    );
+  }
   const src = link.previewImageUrl || getYouTubeThumbnail(link.url);
   if (!src || failed) {
     return (

@@ -697,7 +697,7 @@ export default function DashboardPage({ onLogout, user: initialUser, onProfile, 
           </div>
         </header>
         <main className="flex-1">
-          <div className="mx-auto w-full px-4 pb-12 pt-8 sm:px-10" style={{ maxWidth: `calc(${boardAreaWidth(boards.length)} + 5rem)` }}>
+          <div className="mx-auto w-full px-4 pb-12 pt-8 sm:px-10" style={{ maxWidth: `calc(${boardAreaWidth(4)} + 5rem)` }}>
           <div className="mb-6 flex flex-wrap items-center justify-between gap-x-4 gap-y-3">
             <h1 className="whitespace-nowrap text-3xl font-extrabold tracking-[-0.03em] text-base-content sm:text-4xl">Your boards</h1>
             <div className="ml-auto flex shrink-0 items-center gap-2">
@@ -728,7 +728,8 @@ export default function DashboardPage({ onLogout, user: initialUser, onProfile, 
               : `${matchingLinkCount} ${matchingLinkCount === 1 ? 'link' : 'links'} in ${visibleBoards.length} ${visibleBoards.length === 1 ? 'board' : 'boards'}`}
           </p>
           {/* Boards List */}
-          <Masonry breakpointCols={masonryColumns(boards.length)} className="board-grid mb-4" columnClassName="board-grid-column">
+          {/* Fixed at the full 4-column width so the heading and New board button stay at the edges; few boards sit left. */}
+          <Masonry breakpointCols={masonryColumns(4)}className="board-grid mb-4" columnClassName="board-grid-column">
             {visibleBoards.map(({ board, index: idx }) => (
               <div
                 key={board._id || idx}
@@ -736,6 +737,7 @@ export default function DashboardPage({ onLogout, user: initialUser, onProfile, 
                 onDragStart={!isFiltering && board.isOwner === true ? (e) => handleBoardDragStart(e, idx) : undefined}
                 onDragOver={!isFiltering && board.isOwner === true ? handleBoardDragOver : undefined}
                 onDrop={!isFiltering && board.isOwner === true ? (e) => handleBoardDrop(e, idx) : undefined}
+                onDragEnd={() => setDraggedBoardIndex(null)}
                 className={`draggable-board relative ${draggedBoardIndex === idx ? 'dragging' : ''}`}
               >
                 <LinkCard
