@@ -118,8 +118,11 @@ export function getFaviconUrl(url) {
   }
 }
 
-// Set from the profile page's Display section; on by default.
+// Saved on the user's profile; localStorage is a per-browser cache so cards render right before the profile loads.
 export const SHOW_DOMAINS_KEY = "linkboard:show-domains";
 export const readShowDomains = () => {
   try { return localStorage.getItem(SHOW_DOMAINS_KEY) !== "0"; } catch { return true; }
+};
+export const cacheShowDomains = (value) => {
+  try { localStorage.setItem(SHOW_DOMAINS_KEY, value === false ? "0" : "1"); } catch { /* storage blocked */ }
 };

@@ -6,6 +6,7 @@ import LinkCard, { Favicon } from "./LinkCard";
 import LoadingSpinner from "./components/LoadingSpinner.jsx";
 import Modal from "./components/Modal.jsx";
 import { apiFetch, getUserProfile } from "./firebase";
+import { cacheShowDomains } from "./utils/linkPreview";
 import { BOARD_TEMPLATES } from "./data/boardTemplates";
 import { fetchLinkPreview, getSiteName, normalizeUrl } from "./utils/linkPreview";
 import { matchBoard } from "./utils/search";
@@ -69,6 +70,7 @@ export default function DashboardPage({ onLogout, user: initialUser, onProfile, 
         for (let attempt = 0; attempt < 12; attempt += 1) {
           const result = await getUserProfile();
           if (result.success) {
+            cacheShowDomains(result.data.showDomains);
             if (!cancelled) setUserProfile(result.data);
             return;
           }

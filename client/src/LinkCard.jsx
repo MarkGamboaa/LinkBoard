@@ -127,7 +127,7 @@ export default function LinkCard({
 }) {
   const [draggedLinkIndex, setDraggedLinkIndex] = useState(null);
   const [view, setView] = useState(readView);
-  const [showDomains] = useState(readShowDomains);
+  const showDomains = readShowDomains(); // read each render so the dashboard's profile sync shows up
 
   const normalizedQuery = searchQuery.trim().toLowerCase();
   const isFiltering = Boolean(normalizedQuery);

@@ -71,6 +71,7 @@ model UserProfile {
   firstName   String
   lastName    String
   nickname    String?
+  showDomains Boolean  @default(true)
   displayName String
   updatedAt   DateTime @updatedAt
 }

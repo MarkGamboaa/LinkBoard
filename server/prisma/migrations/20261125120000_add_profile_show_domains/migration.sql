@@ -1,0 +1,1 @@
+ALTER TABLE "UserProfile" ADD COLUMN "showDomains" BOOLEAN NOT NULL DEFAULT true;

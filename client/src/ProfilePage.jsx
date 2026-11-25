@@ -1,9 +1,9 @@
 import React, { useState, useEffect, useRef } from "react";
 import BrandLogo from "./BrandLogo";
-import { updateUserProfile, getUserProfile, uploadProfileImage, deleteProfileImage, changeUserPassword, validatePassword, deleteUserAccount } from "./firebase";
+import { apiFetch, updateUserProfile, getUserProfile, uploadProfileImage, deleteProfileImage, changeUserPassword, validatePassword, deleteUserAccount } from "./firebase";
 import LoadingSpinner from "./components/LoadingSpinner.jsx";
 import Modal from "./components/Modal.jsx";
-import { readShowDomains, SHOW_DOMAINS_KEY } from "./utils/linkPreview";
+import { readShowDomains, cacheShowDomains } from "./utils/linkPreview";
 
 import { auth } from "./firebase";
 export default function ProfilePage({ user, onBack, onLogout, onUserUpdate }) {
@@ -33,9 +33,21 @@ export default function ProfilePage({ user, onBack, onLogout, onUserUpdate }) {
   const fileInputRef = useRef(null);
   const [showDomains, setShowDomains] = useState(readShowDomains);
 
-  const changeShowDomains = (next) => {
+  const changeShowDomains = async (next) => {
     setShowDomains(next);
-    try { localStorage.setItem(SHOW_DOMAINS_KEY, next ? "1" : "0"); } catch { /* storage blocked: choice lasts this visit */ }
+    cacheShowDomains(next);
+    try {
+      const response = await apiFetch('/api/profile/preferences', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ showDomains: next }),
+      });
+      if (!response.ok) throw new Error('Failed to save preference');
+    } catch (error) {
+      console.error('Error saving display preference:', error);
+      setShowDomains(!next);
+      cacheShowDomains(!next);
+    }
   };
 
   const togglePasswordVisibility = (field) => {
@@ -62,6 +74,8 @@ export default function ProfilePage({ user, onBack, onLogout, onUserUpdate }) {
         const result = await getUserProfile();
         if (result.success) {
           setUserProfile(result.data);
+          setShowDomains(result.data.showDomains !== false);
+          cacheShowDomains(result.data.showDomains);
           setFirstName(result.data.firstName || '');
           setLastName(result.data.lastName || '');
           setNickname(result.data.nickname || '');
@@ -472,7 +486,7 @@ export default function ProfilePage({ user, onBack, onLogout, onUserUpdate }) {
               </form>
             </section>
 
-            {/* Display preferences: saved on this device only. */}
+            {/* Display preferences: saved to the account, so every browser gets them. */}
             <section className="sheet" aria-labelledby="display-title">
               <h2 id="display-title" className="px-6 pb-3 pt-5 text-xl font-extrabold tracking-[-0.01em]">Display</h2>
               <label className="flex cursor-pointer items-center justify-between gap-3 border-t border-hairline px-6 py-4">

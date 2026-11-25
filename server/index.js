@@ -540,6 +540,18 @@ app.post('/api/profile', async (request, reply) => {
   return { ...profile, userId: profile.firebaseUid };
 });
 
+app.patch('/api/profile/preferences', async (request, reply) => {
+  if (typeof request.body?.showDomains !== 'boolean') {
+    return reply.code(400).send({ error: 'showDomains must be true or false' });
+  }
+  const { count } = await prisma.userProfile.updateMany({
+    where: { firebaseUid: request.user.uid },
+    data: { showDomains: request.body.showDomains },
+  });
+  if (!count) return reply.code(404).send({ error: 'Profile not found' });
+  return { showDomains: request.body.showDomains };
+});
+
 app.delete('/api/profile', async (request) => {
   await prisma.boardMember.deleteMany({ where: { userUid: request.user.uid } });
   await prisma.userProfile.deleteMany({ where: { firebaseUid: request.user.uid } });
