@@ -3,7 +3,7 @@ import LinkBoardMark from "./assets/linkboard-mark.svg";
 export default function BrandLogo({ markClassName = "h-8 w-8", textClassName = "text-2xl sm:text-3xl", weightClassName = "font-bold", className = "", showMark = true }) {
   const wordmark = (
     <span className={`${textClassName} ${weightClassName} font-logo text-base-content brand-wordmark`}>
-      LinkBoard
+      LinkBoards
     </span>
   );
 

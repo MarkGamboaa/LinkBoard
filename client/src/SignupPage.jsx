@@ -74,7 +74,7 @@ export default function SignupPage({ onBack, onLogin, continueWithBoardCopy = fa
         {/* Left Section (h1 and p) */}
         <div className="w-full lg:w-1/2 flex flex-col justify-center items-center lg:items-end pr-0 text-center lg:text-right mb-8 lg:mb-0">
           <h1 className="mb-4 text-3xl font-bold leading-[1.1] tracking-[-0.03em] text-balance sm:text-4xl md:text-5xl">
-            Join <span className="text-primary">LinkBoard</span> and<br />start organizing smarter
+            Join <span className="text-primary">LinkBoards</span> and<br />start organizing smarter
           </h1>
           <p className="text-base sm:text-lg text-charcoal max-w-md">
             Sign up in seconds. Save links, create boards, and take control of your digital space all in one place.
@@ -84,7 +84,7 @@ export default function SignupPage({ onBack, onLogin, continueWithBoardCopy = fa
         <div className="w-full lg:w-1/2 flex justify-center items-center">
           <div className="bg-card border border-hairline rounded-2xl shadow-xl p-6 sm:p-10 w-full max-w-md flex flex-col justify-center">
             <div className="w-16 h-16 mx-auto mb-4 flex items-center justify-center">
-              <img src={LinkBoardLogo} alt="LinkBoard" width={64} height={64} className="w-full h-full object-contain" />
+              <img src={LinkBoardLogo} alt="LinkBoards" width={64} height={64} className="w-full h-full object-contain" />
             </div>
             <div className="mb-6">
               <h2 className="text-xl sm:text-2xl font-bold">Create an account</h2>

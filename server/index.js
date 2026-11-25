@@ -219,7 +219,7 @@ async function loadPublicBoards() {
   return boards.map((board) => ({
     _id: board.id,
     title: board.title,
-    ownerNickname: ownerNicknames.get(board.ownerUid) || 'LinkBoard user',
+    ownerNickname: ownerNicknames.get(board.ownerUid) || 'LinkBoards user',
     ownerUid: board.ownerUid,
     links: (board.links || []).map(serializeLink),
   }));

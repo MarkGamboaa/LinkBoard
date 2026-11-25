@@ -36,7 +36,7 @@ Shareable boards. Unlike browser bookmarks, a board can be made public for anyon
 
 ## Brand Commitments
 
-- Name "LinkBoard" and the existing logo files stay: `client/src/assets/linkboard-mark.svg`, `client/src/assets/linkboardlogo.svg`.
+- Name "LinkBoards" (renamed from "LinkBoard", Nov 2026) and the existing logo files stay: `client/src/assets/linkboard-mark.svg`, `client/src/assets/linkboardlogo.svg`.
 - Color identity comes from the logo mark's palette (indigo #4632E6, blue #3B82F6, sky #68C8F2) in both light and dark mode; backgrounds are tinted, not plain white or black (user request, 2026-11-24).
 
 ## Evidence on Hand

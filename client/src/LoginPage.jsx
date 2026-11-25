@@ -62,7 +62,7 @@ export default function LoginPage({ onBack, onSignup, onLogin, continueWithBoard
       <div className="flex flex-col items-center w-full max-w-xl mx-auto">
         <div className="bg-card border border-hairline rounded-2xl shadow-xl p-6 sm:p-10 w-full flex flex-col items-center relative">
           <div className="w-16 h-16 mx-auto mb-4 flex items-center justify-center">
-            <img src={LinkBoardLogo} alt="LinkBoard" width={64} height={64} className="w-full h-full object-contain" />
+            <img src={LinkBoardLogo} alt="LinkBoards" width={64} height={64} className="w-full h-full object-contain" />
           </div>
           <h2 className="text-2xl font-bold text-center mb-2">Log in</h2>
           {continueWithBoardCopy && <p className="mb-4 text-center text-sm text-slate">Log in and we’ll add that public board to your private boards.</p>}
