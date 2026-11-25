@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { getDomain, getFaviconUrl, getYouTubeThumbnail, readShowDomains } from "./utils/linkPreview";
+import { getDomain, getFaviconUrl, getOwnFaviconUrl, getYouTubeThumbnail, readShowDomains } from "./utils/linkPreview";
 import { matchBoard } from "./utils/search";
 
 const COMPACT_LIMIT = 5;
@@ -11,12 +11,14 @@ const readView = () => {
 
 
 export function Favicon({ link, size = 16 }) {
-  const [failed, setFailed] = useState(false);
-  const src = link.faviconUrl || getFaviconUrl(link.url);
+  // Try the stored icon, then the site's own /favicon.ico, then Google (which shows a globe for sites it hasn't indexed).
+  const sources = [link.faviconUrl, getOwnFaviconUrl(link.url), getFaviconUrl(link.url)].filter(Boolean);
+  const [step, setStep] = useState(0);
+  const src = sources[step];
   const letter = (getDomain(link.url) || link.title || "?").charAt(0).toUpperCase();
   const box = { width: size, height: size };
 
-  if (!src || failed) {
+  if (!src) {
     return (
       <span aria-hidden="true" style={{ ...box, fontSize: Math.round(size * 0.6) }} className="grid shrink-0 place-items-center rounded bg-base-300 font-semibold text-slate">
         {letter}
@@ -24,7 +26,7 @@ export function Favicon({ link, size = 16 }) {
     );
   }
   return (
-    <img src={src} alt="" style={box} loading="lazy" referrerPolicy="no-referrer" onError={() => setFailed(true)} className="shrink-0 rounded-sm object-contain" />
+    <img src={src} alt="" style={box} loading="lazy" referrerPolicy="no-referrer" onError={() => setStep((n) => n + 1)} className="shrink-0 rounded-sm object-contain" />
   );
 }
 

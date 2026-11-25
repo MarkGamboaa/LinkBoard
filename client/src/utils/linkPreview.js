@@ -101,6 +101,14 @@ export function getSiteName(url) {
   return name.charAt(0).toUpperCase() + name.slice(1);
 }
 
+export function getOwnFaviconUrl(url) {
+  try {
+    return new URL('/favicon.ico', url).toString();
+  } catch {
+    return null;
+  }
+}
+
 export function getFaviconUrl(url) {
   try {
     const hostname = new URL(url).hostname;
