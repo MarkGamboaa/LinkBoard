@@ -97,11 +97,15 @@ export default function PublicBoardPage({ onLogin, onSignup, onBackToDashboard, 
         </header>
 
         {/* Back sits under the logo, aligned with it; it returns to the dashboard when signed in, otherwise to the landing page. */}
-        <div className="px-4 pt-4 sm:px-10">
-          <button type="button" className="btn btn-sm -ml-3 border-0 bg-transparent font-semibold text-primary shadow-none hover:bg-surface" onClick={onBackToDashboard}>
+        {/* Three columns keep the heading centred on the page while sharing a row with Back. */}
+        <div className="grid grid-cols-[1fr_auto_1fr] items-center gap-2 px-4 pt-4 sm:px-10">
+          <button type="button" className="btn btn-sm -ml-3 justify-self-start border-0 bg-transparent font-semibold text-primary shadow-none hover:bg-surface" onClick={onBackToDashboard}>
             <svg aria-hidden="true" className="h-5 w-5" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M10 19l-7-7m0 0l7-7m-7 7h18" /></svg>
             {isLoggedIn ? 'Back to dashboard' : 'Back'}
           </button>
+          {publicBoards.length > 0 && (
+            <h1 className="text-center text-2xl font-bold tracking-[-0.01em] text-charcoal sm:text-3xl">Discover Public Link Boards</h1>
+          )}
         </div>
         <main className="flex-1 flex flex-col items-center justify-start px-2 sm:px-6">
           <div className="flex w-full flex-col items-center p-1 pb-12 pt-4 sm:p-8">
@@ -118,12 +122,6 @@ export default function PublicBoardPage({ onLogin, onSignup, onBackToDashboard, 
               </div>
             ) : (
               <>
-                <div className="w-full mb-6 text-center">
-                  <h1 className="text-xl font-semibold text-charcoal mb-2">
-                    Discover Public Link Boards
-                  </h1>
-                </div>
-                
                 {/* Public Boards List */}
                 <div className="mx-auto w-full" style={{ maxWidth: boardAreaWidth(publicBoards.length) }}>
                 <Masonry breakpointCols={masonryColumns(publicBoards.length)} className="board-grid mb-4" columnClassName="board-grid-column">
