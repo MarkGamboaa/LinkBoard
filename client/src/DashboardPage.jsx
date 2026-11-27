@@ -489,7 +489,9 @@ export default function DashboardPage({ user: initialUser, onProfile, onPublic, 
         if (visibilityRequests.current.get(board._id) !== request) return;
         visibilityIntent.current.set(board._id, !isPublic);
         setBoards((current) => current.map((item) => (item._id === board._id ? { ...item, isPublic: !isPublic } : item)));
-        window.showToast?.('Could not change board visibility. Please try again.', 'error');
+        // Show the server's reason (e.g. the public-board limit); network failures and bare HTTP codes get the generic text.
+        const reason = error instanceof TypeError || /^HTTP \d/.test(error.message) ? null : error.message;
+        window.showToast?.(reason || 'Could not change board visibility. Please try again.', 'error');
       }
     };
     const queued = (visibilityQueue.current.get(board._id) || Promise.resolve()).then(save);
