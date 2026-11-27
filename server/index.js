@@ -25,9 +25,9 @@ const prisma = new PrismaClient({
   adapter: new PrismaPg({ connectionString: databaseUrl }),
 });
 
-// Render sits behind a proxy; without this every visitor shares the proxy's IP and one rate-limit bucket.
-// shortcut: trusting all hops lets a client spoof X-Forwarded-For to dodge the limit; set the exact hop count if abuse shows up.
-const app = Fastify({ logger: true, trustProxy: true });
+// Trust only Render's load balancer (the last X-Forwarded-For hop); earlier entries are client-written and spoofable.
+// If logs show a proxy address instead of visitors' real IPs, there is a second hop: raise this to 2.
+const app = Fastify({ logger: true, trustProxy: 1 });
 
 await app.register(cors, {
   origin: process.env.CORS_ORIGIN
@@ -74,14 +74,16 @@ function serializeLink(link) {
   return { ...link, _id: link.id };
 }
 
-function serializeBoard(board, userUid = null) {
+// Emails never leave the server except collaborators' emails to the board's owner (for the share dialog).
+function serializeBoard({ ownerEmail, ...board }, userUid = null) {
+  const isOwner = userUid ? board.ownerUid === userUid : false;
   return {
     ...board,
     _id: board.id,
     userId: board.ownerUid,
-    userEmail: board.ownerEmail,
     order: board.sortOrder,
-    isOwner: userUid ? board.ownerUid === userUid : false,
+    isOwner,
+    ...(board.members ? { members: board.members.map(({ email, ...member }) => (isOwner ? { ...member, email } : member)) } : {}),
     links: (board.links || []).map(serializeLink),
   };
 }
@@ -99,6 +101,15 @@ function safeMetadataUrl(value) {
 const MAX_BOARD_TITLE_LENGTH = 100;
 const MAX_LINKS_PER_BOARD = 200;
 const PUBLIC_BOARD_LIMIT = 50;
+// Per-user caps so one account can't fill the database or the whole Discover page.
+// shortcut: count-then-create isn't atomic, so simultaneous requests can overshoot by one or two; fine for abuse limits.
+const MAX_BOARDS_PER_USER = 100;
+const MAX_PUBLIC_BOARDS_PER_USER = 10;
+const boardLimitError = async (ownerUid) => (
+  await prisma.board.count({ where: { ownerUid } }) >= MAX_BOARDS_PER_USER
+    ? `You can have at most ${MAX_BOARDS_PER_USER} boards. Delete one to make room.`
+    : null
+);
 
 function linksError(links) {
   if (!links) return 'Links must be an array';
@@ -186,14 +197,17 @@ app.get('/api/boards', async (request) => {
     select: { firebaseUid: true, nickname: true },
   });
   const memberNicknames = new Map(memberProfiles.map((profile) => [profile.firebaseUid, profile.nickname?.trim()]));
-  return boards.map((board) => ({
-    ...serializeBoard(board, request.user.uid),
-    members: board.members.map((member) => ({
-      ...member,
-      nickname: memberNicknames.get(member.userUid) || null,
-    })),
-    ownerName: ownerNicknames.get(board.ownerUid) || 'Board owner',
-  }));
+  return boards.map((board) => {
+    const serialized = serializeBoard(board, request.user.uid);
+    return {
+      ...serialized,
+      members: serialized.members.map((member) => ({
+        ...member,
+        nickname: memberNicknames.get(member.userUid) || null,
+      })),
+      ownerName: ownerNicknames.get(board.ownerUid) || 'Board owner',
+    };
+  });
 });
 
 app.get('/api/boards/public', async (request) => {
@@ -234,6 +248,8 @@ app.post('/api/boards/:id/copy', async (request, reply) => {
   if (sourceBoard.ownerUid === request.user.uid) {
     return reply.code(403).send({ error: 'You cannot copy your own public board' });
   }
+  const limitProblem = await boardLimitError(request.user.uid);
+  if (limitProblem) return reply.code(400).send({ error: limitProblem });
 
   const copiedBoard = await prisma.board.create({
     data: {
@@ -272,6 +288,8 @@ app.post('/api/boards', async (request, reply) => {
   const links = normalizeLinks(request.body?.links || []);
   const linkProblem = linksError(links);
   if (linkProblem) return reply.code(400).send({ error: linkProblem });
+  const limitProblem = await boardLimitError(request.user.uid);
+  if (limitProblem) return reply.code(400).send({ error: limitProblem });
 
   const board = await prisma.board.create({
     data: {
@@ -301,6 +319,12 @@ app.put('/api/boards/:id', async (request, reply) => {
     if (!title) return reply.code(400).send({ error: 'Board title cannot be empty' });
     if (title.length > MAX_BOARD_TITLE_LENGTH) return reply.code(400).send({ error: `Board title must be ${MAX_BOARD_TITLE_LENGTH} characters or fewer` });
     data.title = title;
+  }
+  if (request.body?.isPublic === true && !existing.isPublic) {
+    const publicCount = await prisma.board.count({ where: { ownerUid: request.user.uid, isPublic: true } });
+    if (publicCount >= MAX_PUBLIC_BOARDS_PER_USER) {
+      return reply.code(400).send({ error: `You can have at most ${MAX_PUBLIC_BOARDS_PER_USER} public boards. Make another one private first.` });
+    }
   }
   if (typeof request.body?.isPublic === 'boolean') data.isPublic = request.body.isPublic;
   if (Number.isInteger(request.body?.order)) data.sortOrder = request.body.order;
