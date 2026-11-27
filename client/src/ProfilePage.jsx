@@ -4,6 +4,7 @@ import { apiFetch, updateUserProfile, getUserProfile, uploadProfileImage, delete
 import LoadingSpinner from "./components/LoadingSpinner.jsx";
 import Modal from "./components/Modal.jsx";
 import { readShowDomains, cacheShowDomains } from "./utils/linkPreview";
+import { readTheme, setTheme } from "./utils/theme";
 
 import { auth } from "./firebase";
 export default function ProfilePage({ user, onBack, onLogout, onUserUpdate }) {
@@ -32,6 +33,7 @@ export default function ProfilePage({ user, onBack, onLogout, onUserUpdate }) {
   const [logoutLoading, setLogoutLoading] = useState(false);
   const fileInputRef = useRef(null);
   const [showDomains, setShowDomains] = useState(readShowDomains);
+  const [theme, setThemeChoice] = useState(readTheme);
 
   const changeShowDomains = async (next) => {
     setShowDomains(next);
@@ -353,56 +355,12 @@ export default function ProfilePage({ user, onBack, onLogout, onUserUpdate }) {
       <div className="max-w-[1800px] mx-auto w-full">
         <header className="cover-band flex items-center justify-between gap-2 px-4 py-3 sm:px-10 sm:py-4">
           <BrandLogo />
-          {/* Desktop menu */}
-          <div className="hidden sm:flex gap-4 items-center">
-            <button className="btn btn-sm btn-ghost" onClick={onBack}>
-              <svg className="inline-block w-5 h-5 mr-1" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" d="M15 19l-7-7 7-7" />
-              </svg>
-              Back
-            </button>
-            <button className={`btn btn-sm btn-ghost ${logoutLoading ? 'enhanced-button-loading' : ''}`} onClick={handleLogout} disabled={logoutLoading}>
-              {logoutLoading ? (
-                <>
-                  <span className="enhanced-button-spinner w-3 h-3"></span>
-                  Logging out…
-                </>
-              ) : (
-                <>
-                  Logout <span className="ml-1">→</span>
-                </>
-              )}
-            </button>
-          </div>
-          {/* Mobile menu */}
-          <div className="sm:hidden flex items-center relative">
-            <button className="btn btn-sm btn-ghost" popoverTarget="profile-menu" style={{ anchorName: '--profile-menu' }} aria-label="Menu">
-              <svg aria-hidden="true" className="w-6 h-6" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" d="M4 6h16M4 12h16M4 18h16" />
-              </svg>
-            </button>
-            {/* Native popover: Esc and outside clicks close it. */}
-              <div id="profile-menu" popover="auto" className="popover-menu" style={{ positionAnchor: '--profile-menu' }}>
-                <button className="px-4 py-2 text-left hover:bg-base-200" onClick={onBack}>
-                  <svg className="inline-block w-5 h-5 mr-1" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" d="M15 19l-7-7 7-7" />
-                  </svg>
-                  Back
-                </button>
-                <button className={`px-4 py-2 text-left hover:bg-base-200 ${logoutLoading ? 'enhanced-button-loading' : ''}`} onClick={handleLogout} disabled={logoutLoading}>
-                  {logoutLoading ? (
-                    <>
-                      <span className="enhanced-button-spinner w-3 h-3"></span>
-                      Logging out…
-                    </>
-                  ) : (
-                    <>
-                      Logout <span className="ml-1">→</span>
-                    </>
-                  )}
-                </button>
-              </div>
-          </div>
+          <button className="btn btn-sm btn-ghost" onClick={onBack}>
+            <svg aria-hidden="true" className="inline-block w-5 h-5 mr-1" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" d="M15 19l-7-7 7-7" />
+            </svg>
+            Back
+          </button>
         </header>
 
         <main className="mx-auto w-full max-w-3xl flex-1 px-4 pb-16 pt-8 sm:px-6">
@@ -496,6 +454,26 @@ export default function ProfilePage({ user, onBack, onLogout, onUserUpdate }) {
                 </span>
                 <input type="checkbox" className="toggle toggle-primary" checked={showDomains} onChange={(event) => changeShowDomains(event.target.checked)} />
               </label>
+              <fieldset className="flex flex-wrap items-center justify-between gap-3 border-t border-hairline px-6 py-4">
+                <legend className="sr-only">Theme</legend>
+                <span aria-hidden="true">
+                  <span className="block font-semibold text-base-content">Theme</span>
+                  <span className="block text-sm text-steel">System follows your device. Saved on this device.</span>
+                </span>
+                <div className="join">
+                  {['system', 'light', 'dark'].map((option) => (
+                    <input
+                      key={option}
+                      type="radio"
+                      name="theme"
+                      className="btn btn-sm join-item capitalize"
+                      aria-label={option.charAt(0).toUpperCase() + option.slice(1)}
+                      checked={theme === option}
+                      onChange={() => { setTheme(option); setThemeChoice(option); }}
+                    />
+                  ))}
+                </div>
+              </fieldset>
             </section>
 
             {/* Security */}
@@ -524,6 +502,11 @@ export default function ProfilePage({ user, onBack, onLogout, onUserUpdate }) {
                 </button>
               </div>
             </section>
+            <div className="flex justify-end">
+              <button type="button" className="btn border-hairline-strong bg-card px-6 font-semibold text-base-content hover:border-steel hover:bg-surface" onClick={handleLogout} disabled={logoutLoading}>
+                {logoutLoading ? <><span className="enhanced-button-spinner w-3 h-3"></span> Logging out…</> : 'Log out'}
+              </button>
+            </div>
           </div>
       </main>
       </div>

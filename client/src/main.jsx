@@ -141,9 +141,8 @@ function App() {
   if (page === 'dashboard' && user) {
     return (
       <>
-        <DashboardPage 
-          user={user} 
-          onLogout={handleLogout}
+        <DashboardPage
+          user={user}
           onProfile={() => navigate('profile')}
           onPublic={() => navigate('public')}
           pendingBoardCopyId={pendingBoardCopyId}

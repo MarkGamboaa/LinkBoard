@@ -75,7 +75,7 @@ export default function LandingPage({ onSignup, onLogin, onPublic }) {
             <main className="grid min-h-0 flex-1 place-items-center py-6">
                 {/* The label is the anchor: sample boards are positioned against it, not the window. */}
                 <div className="landing-stage relative mx-auto w-full max-w-3xl">
-                    <div className="relative z-10 rounded-[18px] bg-white px-6 py-10 text-center text-base-content shadow-[0_24px_60px_-20px_rgb(10_10_60/0.6)] sm:px-12">
+                    <div className="relative z-10 rounded-[18px] bg-card px-6 py-10 text-center text-base-content shadow-[0_24px_60px_-20px_rgb(10_10_60/0.6)] sm:px-12">
                         {/* Dashed inset edge: the label stuck on the cover. */}
                         <span aria-hidden="true" className="pointer-events-none absolute inset-2.5 rounded-xl border-[1.5px] border-dashed border-hairline-strong" />
                         <h1 className="relative text-[2.5rem] font-black leading-[1.06] tracking-[-0.035em] text-balance sm:text-5xl lg:text-[3.5rem]">

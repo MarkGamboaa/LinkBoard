@@ -3,7 +3,19 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <meta name="color-scheme" content="light" />
+    <meta name="color-scheme" content="light dark" />
+    <script>
+      // Runs before paint so dark mode never flashes light. Keep in sync with src/utils/theme.js.
+      (function () {
+        var media = matchMedia('(prefers-color-scheme: dark)');
+        function apply() {
+          var choice; try { choice = localStorage.getItem('linkboard:theme'); } catch (e) {}
+          document.documentElement.dataset.theme = choice === 'light' || choice === 'dark' ? choice : (media.matches ? 'dark' : 'light');
+        }
+        apply();
+        media.addEventListener('change', apply);
+      })();
+    </script>
     <meta name="theme-color" content="#4632e6" />
     <title>LinkBoards</title>
     <link rel="icon" href="/favicon.ico" sizes="32x32" />

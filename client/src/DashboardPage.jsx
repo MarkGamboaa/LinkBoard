@@ -13,7 +13,7 @@ import { matchBoard } from "./utils/search";
 
 const UNDO_DELAY_MS = 6000;
 
-export default function DashboardPage({ onLogout, user: initialUser, onProfile, onPublic, pendingBoardCopyId = null, onPendingBoardCopyHandled }) {
+export default function DashboardPage({ user: initialUser, onProfile, onPublic, pendingBoardCopyId = null, onPendingBoardCopyHandled }) {
   const [userProfile, setUserProfile] = useState(null);
   const [userProfileLoading, setUserProfileLoading] = useState(true);
   const [boards, setBoards] = useState([]);
@@ -42,7 +42,6 @@ export default function DashboardPage({ onLogout, user: initialUser, onProfile, 
   const [memberRemovalError, setMemberRemovalError] = useState('');
   const [removingMember, setRemovingMember] = useState(false);
   const [loading, setLoading] = useState(true);
-  const [logoutLoading, setLogoutLoading] = useState(false);
   const [addingLinkLoading, setAddingLinkLoading] = useState(false);
   // Deleted links wait here for UNDO_DELAY_MS before the server delete runs, so Undo restores the same link.
   const [pendingDeletes, setPendingDeletes] = useState([]);
@@ -497,16 +496,6 @@ export default function DashboardPage({ onLogout, user: initialUser, onProfile, 
     visibilityQueue.current.set(board._id, queued);
   };
 
-  // Logout handler with loading state
-  const handleLogout = async () => {
-    setLogoutLoading(true);
-    try {
-      await onLogout();
-    } catch (error) {
-      console.error('Error during logout:', error);
-      setLogoutLoading(false);
-    }
-  };
 
   // Add board handler
   const handleAddBoard = async () => {
@@ -651,18 +640,6 @@ export default function DashboardPage({ onLogout, user: initialUser, onProfile, 
               <svg className="inline-block w-5 h-5 mr-1" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><path d="M5.121 17.804A13.937 13.937 0 0112 15c2.5 0 4.847.655 6.879 1.804M15 11a3 3 0 11-6 0 3 3 0 016 0z" /></svg>
               Hi, {getUserNickname()}
             </button>
-            <button className={`btn btn-sm btn-ghost ${logoutLoading ? 'enhanced-button-loading' : ''}`} onClick={handleLogout} disabled={logoutLoading}>
-              {logoutLoading ? (
-                <>
-                  <span className="enhanced-button-spinner w-3 h-3"></span>
-                  Logging out…
-                </>
-              ) : (
-                <>
-                  Logout <span className="ml-1">→</span>
-                </>
-              )}
-            </button>
           </div>
           {/* Mobile menu */}
           <div className="relative ml-auto flex items-center sm:hidden">
@@ -680,18 +657,6 @@ export default function DashboardPage({ onLogout, user: initialUser, onProfile, 
                 <button className="px-4 py-2 text-left hover:bg-base-200 flex items-center gap-2" onClick={onProfile}>
                   <svg className="inline-block w-5 h-5" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><path d="M5.121 17.804A13.937 13.937 0 0112 15c2.5 0 4.847.655 6.879 1.804M15 11a3 3 0 11-6 0 3 3 0 016 0z" /></svg>
                   Hi, {getUserNickname()}
-                </button>
-                <button className={`px-4 py-2 text-left hover:bg-base-200 ${logoutLoading ? 'enhanced-button-loading' : ''}`} onClick={handleLogout} disabled={logoutLoading}>
-                  {logoutLoading ? (
-                    <>
-                      <span className="enhanced-button-spinner w-3 h-3"></span>
-                      Logging out…
-                    </>
-                  ) : (
-                    <>
-                      Logout <span className="ml-1">→</span>
-                    </>
-                  )}
                 </button>
               </div>
           </div>

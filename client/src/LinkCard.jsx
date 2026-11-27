@@ -26,7 +26,7 @@ export function Favicon({ link, size = 16 }) {
     );
   }
   return (
-    <img src={src} alt="" style={box} loading="lazy" referrerPolicy="no-referrer" onError={() => setStep((n) => n + 1)} className="shrink-0 rounded-sm object-contain" />
+    <img src={src} alt="" style={{ ...box, "--favicon-pad": `${Math.max(1, Math.round(size * 0.12))}px` }} loading="lazy" referrerPolicy="no-referrer" onError={() => setStep((n) => n + 1)} className="favicon shrink-0 rounded-sm object-contain" />
   );
 }
 

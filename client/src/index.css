@@ -25,6 +25,7 @@
   --lb-steel: #59669a;
   --lb-primary: #4632e6;
   --lb-primary-pressed: #3623c4;
+  --lb-cover: var(--lb-primary);
   --lb-on-primary: #ffffff;
   --lb-blue: #3b82f6;
   --lb-sky: #68c8f2;
@@ -67,6 +68,40 @@
 
   accent-color: var(--lb-primary);
   scrollbar-color: var(--lb-hairline-strong) transparent;
+}
+
+/* Dark: the same notebook at night. Deep indigo-navy page and sheets (never flat black), periwinkle ink,
+   the indigo cover band unchanged. index.html sets data-theme before first paint (system unless chosen). */
+:root[data-theme="dark"] {
+  color-scheme: dark;
+
+  --lb-canvas: #121936;
+  --lb-page: #0e1430;
+  --lb-grid: #151c44;
+  --lb-card: #151d40;
+  --lb-surface: #1b2450;
+  --lb-surface-soft: #18214a;
+  --lb-hairline: #263166;
+  --lb-hairline-strong: #313d7a;
+  --lb-ink: #e8ecff;
+  --lb-charcoal: #cdd4f7;
+  --lb-slate: #a7b0db;
+  --lb-steel: #98a2d2;
+  --lb-primary: #5340f0;
+  --lb-primary-pressed: #4632e6;
+  --lb-cover: #2a1f8c; /* deeper indigo band so a full-width header isn't glaring at night */
+  --lb-on-primary: #ffffff;
+  --lb-blue: #6aa2ff;
+  --lb-sky: #7fd3f7;
+  --lb-link: #93b6ff;
+  --lb-success: #5fd380;
+  --lb-warning: #f5a35c;
+  --lb-error: #ff7b7b;
+}
+
+/* Indigo text on navy is too dim, so dark mode lifts it; white-tile buttons on the band keep the strong indigo. */
+:root[data-theme="dark"] .text-primary:not([class*="bg-white"]) {
+  color: #a99dff;
 }
 
 @theme inline {
@@ -135,9 +170,9 @@ html {
 
 /* ---------- Cover band: the notebook's indigo cover, full-bleed whatever wraps the header ---------- */
 .cover-band {
-  background: var(--lb-primary);
+  background: var(--lb-cover);
   color: var(--lb-on-primary);
-  box-shadow: 0 0 0 100vmax var(--lb-primary);
+  box-shadow: 0 0 0 100vmax var(--lb-cover);
   clip-path: inset(0 -100vmax);
 }
 
@@ -408,4 +443,12 @@ dialog::backdrop {
   .btn {
     min-height: 44px;
   }
+}
+
+/* Dark mode: black logos (GitHub, Komoot…) vanish on navy, so every favicon sits on a soft light tile. */
+:root[data-theme="dark"] .favicon {
+  box-sizing: border-box;
+  padding: var(--favicon-pad, 2px);
+  border-radius: 4px;
+  background: #e8ecff;
 }
