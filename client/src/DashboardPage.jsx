@@ -13,6 +13,12 @@ import { matchBoard } from "./utils/search";
 
 const UNDO_DELAY_MS = 6000;
 
+// New boards go after the user's own boards and before shared ones, matching the order the API returns.
+const withOwnBoard = (boards, board) => {
+  const at = boards.findLastIndex((item) => item.isOwner) + 1;
+  return [...boards.slice(0, at), board, ...boards.slice(at)];
+};
+
 export default function DashboardPage({ user: initialUser, onProfile, onPublic, pendingBoardCopyId = null, onPendingBoardCopyHandled }) {
   const [userProfile, setUserProfile] = useState(null);
   const [userProfileLoading, setUserProfileLoading] = useState(true);
@@ -98,7 +104,7 @@ export default function DashboardPage({ user: initialUser, onProfile, onPublic, 
         const response = await apiFetch(`/api/boards/${encodeURIComponent(pendingBoardCopyId)}/copy`, { method: 'POST' });
         const result = await response.json().catch(() => ({}));
         if (!response.ok) throw new Error(result.error || 'Could not copy this board. Please try again.');
-        setBoards((current) => [...current, result]);
+        setBoards((current) => withOwnBoard(current, result));
         window.showToast?.(`Copied as “${result.title}” to your private boards.`, 'success');
       } catch (error) {
         window.showToast?.(error.message || 'Could not copy this board. Please try again.', 'error');
@@ -525,7 +531,7 @@ export default function DashboardPage({ user: initialUser, onProfile, onPublic, 
         throw new Error(result.error || `Could not create board (HTTP ${response.status})`);
       }
 
-      setBoards(currentBoards => [...currentBoards, result]);
+      setBoards((currentBoards) => withOwnBoard(currentBoards, result));
       setNewBoardTitle("");
       setNewBoardTemplateId('blank');
       setModalOpen(false);

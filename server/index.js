@@ -105,11 +105,12 @@ const PUBLIC_BOARD_LIMIT = 50;
 // shortcut: count-then-create isn't atomic, so simultaneous requests can overshoot by one or two; fine for abuse limits.
 const MAX_BOARDS_PER_USER = 100;
 const MAX_PUBLIC_BOARDS_PER_USER = 10;
-const boardLimitError = async (ownerUid) => (
-  await prisma.board.count({ where: { ownerUid } }) >= MAX_BOARDS_PER_USER
-    ? `You can have at most ${MAX_BOARDS_PER_USER} boards. Delete one to make room.`
-    : null
-);
+// Where a new board goes: after the owner's last board (the schema default 0 put it right after the first one).
+async function newBoardSlot(ownerUid) {
+  const { _count, _max } = await prisma.board.aggregate({ where: { ownerUid }, _count: true, _max: { sortOrder: true } });
+  if (_count >= MAX_BOARDS_PER_USER) return { error: `You can have at most ${MAX_BOARDS_PER_USER} boards. Delete one to make room.` };
+  return { sortOrder: (_max.sortOrder ?? -1) + 1 };
+}
 
 function linksError(links) {
   if (!links) return 'Links must be an array';
@@ -173,7 +174,7 @@ app.get('/api/health', async (_request, reply) => {
 });
 
 app.get('/api/boards', async (request) => {
-  const boards = await prisma.board.findMany({
+  const found = await prisma.board.findMany({
     where: {
       OR: [
         { ownerUid: request.user.uid },
@@ -186,6 +187,13 @@ app.get('/api/boards', async (request) => {
     },
     orderBy: [{ sortOrder: 'asc' }, { createdAt: 'asc' }],
   });
+  // Own boards in the order the user set; shared boards after them in the order they were joined.
+  // sortOrder belongs to each board's owner, so it would scatter shared boards among this user's own.
+  const joinedAt = (board) => board.members.find((member) => member.userUid === request.user.uid)?.createdAt?.getTime() ?? 0;
+  const boards = [
+    ...found.filter((board) => board.ownerUid === request.user.uid),
+    ...found.filter((board) => board.ownerUid !== request.user.uid).sort((a, b) => joinedAt(a) - joinedAt(b)),
+  ];
   const ownerProfiles = await prisma.userProfile.findMany({
     where: { firebaseUid: { in: [...new Set(boards.map((board) => board.ownerUid))] } },
     select: { firebaseUid: true, nickname: true },
@@ -248,12 +256,13 @@ app.post('/api/boards/:id/copy', async (request, reply) => {
   if (sourceBoard.ownerUid === request.user.uid) {
     return reply.code(403).send({ error: 'You cannot copy your own public board' });
   }
-  const limitProblem = await boardLimitError(request.user.uid);
-  if (limitProblem) return reply.code(400).send({ error: limitProblem });
+  const slot = await newBoardSlot(request.user.uid);
+  if (slot.error) return reply.code(400).send({ error: slot.error });
 
   const copiedBoard = await prisma.board.create({
     data: {
       title: sourceBoard.title,
+      sortOrder: slot.sortOrder,
       ownerUid: request.user.uid,
       ownerEmail: request.user.email,
       isPublic: false,
@@ -288,12 +297,13 @@ app.post('/api/boards', async (request, reply) => {
   const links = normalizeLinks(request.body?.links || []);
   const linkProblem = linksError(links);
   if (linkProblem) return reply.code(400).send({ error: linkProblem });
-  const limitProblem = await boardLimitError(request.user.uid);
-  if (limitProblem) return reply.code(400).send({ error: limitProblem });
+  const slot = await newBoardSlot(request.user.uid);
+  if (slot.error) return reply.code(400).send({ error: slot.error });
 
   const board = await prisma.board.create({
     data: {
       title,
+      sortOrder: slot.sortOrder,
       ownerUid: request.user.uid,
       ownerEmail: request.user.email,
       links: { create: links },
